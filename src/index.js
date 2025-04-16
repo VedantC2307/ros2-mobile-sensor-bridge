@@ -4,7 +4,18 @@ const express = require('express');
 const path = require('path');
 const WebSocket = require('ws');
 const rclnodejs = require('rclnodejs');
+const yaml = require('js-yaml');
 
+// Load configuration from YAML file
+let config = {};
+try {
+  const configFile = fs.readFileSync(path.join(__dirname, 'config.yaml'), 'utf8');
+  config = yaml.load(configFile);
+  console.log('Loaded configuration:', config);
+} catch (e) {
+  console.error('Error loading configuration:', e);
+  config = { camera: { facingMode: "user" } }; // Default config
+}
 
 const app = express();
 let ttsClients = new Set();
@@ -73,6 +84,11 @@ app.use(express.json());
 // Serve index.html on GET /
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// Add an API endpoint to expose configuration
+app.get('/api/config', (req, res) => {
+  res.json(config);
 });
 
 const options = {
@@ -146,6 +162,11 @@ wssPose.on('connection', (ws) => {
     } catch (err) {
       console.error('Error processing pose message:', err);
     }
+  });
+  
+  // Add disconnect logging
+  ws.on('close', () => {
+    console.log('Pose data WebSocket client disconnected');
   });
 });
 
@@ -233,6 +254,11 @@ wssCamera.on('connection', (ws) => {
       console.error('Error processing camera message:', err);
     }
   });
+  
+  // Add disconnect logging
+  ws.on('close', () => {
+    console.log('Camera data WebSocket client disconnected');
+  });
 });
 
 // Handle TTS WebSocket connections
@@ -241,6 +267,7 @@ wssTTS.on('connection', (ws) => {
   ttsClients.add(ws);
   
   ws.on('close', () => {
+    console.log('TTS WebSocket client disconnected');
     ttsClients.delete(ws);
   });
 });
@@ -271,6 +298,11 @@ wssAudio.on('connection', (ws) => {
     } catch (err) {
       console.error('Error processing audio message:', err);
     }
+  });
+  
+  // Add disconnect logging
+  ws.on('close', () => {
+    console.log('Audio WebSocket client disconnected');
   });
 });
 
@@ -304,8 +336,29 @@ process.on('uncaughtException', (err) => {
 // Initialize ROS2 and start server
 initRos().then((node) => {
   const port = process.env.PORT || 4000;
-  server.listen(port, () => {
-    console.log(`HTTPS server running at https://localhost:${port}`);
+  
+  // Get network interfaces to show all available IP addresses
+  const { networkInterfaces } = require('os');
+  
+  server.listen(port, '0.0.0.0', () => {
+    // console.log(`HTTPS server running on port ${port}`);
+    
+    // Display all network interfaces for easy connection
+    const nets = networkInterfaces();
+    const results = {};
+    
+    for (const name of Object.keys(nets)) {
+      for (const net of nets[name]) {
+        // Skip over non-IPv4 and internal (loopback) addresses
+        if (net.family === 'IPv4' && !net.internal) {
+          if (!results[name]) {
+            results[name] = [];
+          }
+          results[name].push(net.address);
+          console.log(`Access URL: https://${net.address}:${port}`);
+        }
+      }
+    }
     // Start ROS2 spinning
     rclnodejs.spin(node);
   });

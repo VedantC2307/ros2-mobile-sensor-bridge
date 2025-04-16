@@ -1,0 +1,2 @@
+camera:
+  facingMode: "environment" # Change to "user" for the front camera

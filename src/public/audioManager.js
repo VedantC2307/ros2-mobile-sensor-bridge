@@ -70,6 +70,7 @@ class AudioManager {
 
                             if (ws && ws.readyState === WebSocket.OPEN) {
                                 const now = Date.now();
+                                const timestamp = Date.now(); // Declare and initialize the timestamp variable
                                 ws.send(JSON.stringify({ 
                                     header: {
                                         stamp: {

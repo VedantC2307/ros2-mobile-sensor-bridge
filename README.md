@@ -87,6 +87,18 @@ To send text-to-speech messages to the device, publish to:
 
 - `/mobile_sensor/tts` (`std_msgs/String`): Text to be spoken
 
+### Viewing Camera Frames with rqt
+To view the camera frames published by the mobile sensor node:
+
+1. Open `rqt`:
+   ```bash
+   rqt
+   ```
+
+2. Navigate to **Plugins** > **Visualization** > **Image View**.
+
+3. In the **Image View** plugin, select the topic `/camera/image_raw/compressed` to view the stream.
+
 ## Docker Deployment
 
 For Docker deployment, see [Docker instructions](docker/README.md).

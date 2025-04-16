@@ -3,6 +3,30 @@ class CameraManager {
         this.cameraStarted = false;
         this.videoTrack = null;
         this.lastCameraFrame = null;
+        this.cameraConfig = {
+            facingMode: "environment" // Default value until config is loaded
+        };
+        
+        // Fetch camera configuration when created
+        this.fetchCameraConfig();
+    }
+    
+    // New method to fetch camera configuration from the server
+    async fetchCameraConfig() {
+        try {
+            const response = await fetch('/api/config');
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const config = await response.json();
+            if (config.camera && config.camera.facingMode) {
+                this.cameraConfig.facingMode = config.camera.facingMode;
+                console.log('Using camera facing mode from config:', this.cameraConfig.facingMode);
+            }
+        } catch (error) {
+            console.error('Failed to load camera config:', error);
+            // Keep using the default
+        }
     }
 
     async startCamera(ws, isSessionActive) {
@@ -12,8 +36,13 @@ class CameraManager {
                 throw new Error('getUserMedia API not supported');
             }
 
+            // Check if 3D Position is enabled and override to user facing if it is
+            const poseEnabled = document.getElementById('pose-select').checked;
+            const facingMode = poseEnabled ? "user" : this.cameraConfig.facingMode;
+            console.log(`Starting camera with facing mode: ${facingMode} (pose enabled: ${poseEnabled})`);
+
             const stream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: "user" },
+                video: { facingMode: facingMode },
             });
             this.videoTrack = stream.getVideoTracks()[0];
 

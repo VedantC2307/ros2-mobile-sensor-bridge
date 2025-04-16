@@ -286,6 +286,13 @@
         if (statusEl) {
           statusEl.className = `connection-status ${status}`;
         }
+        
+        // Log status changes to the console
+        if (status === 'disconnected') {
+          console.log(`${type.charAt(0).toUpperCase() + type.slice(1)} sensor disconnected`);
+        } else if (status === 'connected') {
+          console.log(`${type.charAt(0).toUpperCase() + type.slice(1)} sensor connected`);
+        }
       }
 
       // Modify WebSocket connection handlers to update status indicators
