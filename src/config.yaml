@@ -1,2 +1,6 @@
 camera:
-  facingMode: "environment" # Change to "user" for the front camera
+  facingMode: "user" # Change to "user" for the front camera
+
+audio:
+  mode: "wav" # Options: "wav", "mp3" or "tts"
+  enabled: true

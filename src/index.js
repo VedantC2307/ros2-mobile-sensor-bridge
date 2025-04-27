@@ -14,7 +14,10 @@ try {
   console.log('Loaded configuration:', config);
 } catch (e) {
   console.error('Error loading configuration:', e);
-  config = { camera: { facingMode: "user" } }; // Default config
+  config = { 
+    camera: { facingMode: "user" },
+    audio: { mode: "wav", enabled: true }
+  }; // Default config
 }
 
 const app = express();
@@ -51,7 +54,7 @@ async function initRos() {
     { qos: { depth: 10 } }
   );
 
-  // Update audio publisher to use Header and String
+  // Add Audio publisher
   rosPublishers.audio = node.createPublisher(
     'std_msgs/msg/String',
     'mobile_sensor/speech',
@@ -73,7 +76,76 @@ async function initRos() {
     { qos: { depth: 10 } }
   );
   
-  console.log('ROS2 node initialized with camera, pose publishers and TTS subscriber');
+  // Update UInt8MultiArray subscriber for WAV audio to handle both 'wav_bytes' and 'tts_wav' topics
+  node.createSubscription(
+    'std_msgs/msg/UInt8MultiArray',
+    'tts_wav', // Subscribe to the topic used by audio_testing_node.py
+    (msg) => {
+      try {
+        const buffer = Buffer.from(msg.data);
+        
+        // Check if the buffer has a WAV header (starts with 'RIFF' and contains 'WAVE')
+        const hasWavHeader = 
+          buffer.length >= 12 && 
+          buffer[0] === 82 && buffer[1] === 73 && buffer[2] === 70 && buffer[3] === 70 && // 'RIFF'
+          buffer[8] === 87 && buffer[9] === 65 && buffer[10] === 86 && buffer[11] === 69; // 'WAVE'
+        
+        // If header is present, log it and forward as-is
+        // The client no longer needs to add a header
+        let clientCount = 0;
+        
+        wssWavAudio.clients.forEach(client => {
+          if (client.readyState === WebSocket.OPEN) {
+            client.send(buffer);
+            clientCount++;
+          }
+        });
+        
+        if (clientCount > 0) {
+          console.log(`Forwarded WAV audio: ${buffer.length} bytes to ${clientCount} clients, WAV header: ${hasWavHeader ? 'present' : 'absent'}`);
+        }
+      } catch (error) {
+        console.error('Error processing audio data:', error);
+      }
+    },
+    { qos: { depth: 10 } }
+  );
+  
+  // Also keep the original wav_bytes subscription for backward compatibility
+  node.createSubscription(
+    'std_msgs/msg/UInt8MultiArray',
+    'wav_bytes',
+    (msg) => {
+      try {
+        const buffer = Buffer.from(msg.data);
+        
+        // Check if the buffer has a WAV header (starts with 'RIFF' and contains 'WAVE')
+        const hasWavHeader = 
+          buffer.length >= 12 && 
+          buffer[0] === 82 && buffer[1] === 73 && buffer[2] === 70 && buffer[3] === 70 && // 'RIFF'
+          buffer[8] === 87 && buffer[9] === 65 && buffer[10] === 86 && buffer[11] === 69; // 'WAVE'
+        
+        // Send the buffer to all connected wav_audio clients
+        let clientCount = 0;
+        
+        wssWavAudio.clients.forEach(client => {
+          if (client.readyState === WebSocket.OPEN) {
+            client.send(buffer);
+            clientCount++;
+          }
+        });
+        
+        if (clientCount > 0) {
+          console.log(`Forwarded audio data: ${buffer.length} bytes to ${clientCount} clients, WAV header: ${hasWavHeader ? 'present' : 'absent'}`);
+        }
+      } catch (error) {
+        console.error('Error processing audio data:', error);
+      }
+    },
+    { qos: { depth: 10 } }
+  );
+  
+  console.log('ROS2 node initialized with camera, pose publisher, TTS and WAV audio subscribers');
   return node;
 }
 
@@ -96,7 +168,6 @@ const options = {
     cert: fs.readFileSync(path.join(__dirname, 'cert.pem')),
 };
 
-
 // Create HTTPS server
 const server = https.createServer(options, app);
 
@@ -105,6 +176,7 @@ const wssPose = new WebSocket.Server({ noServer: true });
 const wssCamera = new WebSocket.Server({ noServer: true });
 const wssTTS = new WebSocket.Server({ noServer: true });
 const wssAudio = new WebSocket.Server({ noServer: true });
+const wssWavAudio = new WebSocket.Server({ noServer: true }); // WebSocket server for WAV audio streaming
 
 // Handle upgrade requests to separate WebSocket connections
 server.on('upgrade', (request, socket, head) => {
@@ -129,6 +201,11 @@ server.on('upgrade', (request, socket, head) => {
     case '/audio':
       wssAudio.handleUpgrade(request, socket, head, (ws) => {
         wssAudio.emit('connection', ws, request);
+      });
+      break;
+    case '/wav_audio':
+      wssWavAudio.handleUpgrade(request, socket, head, (ws) => {
+        wssWavAudio.emit('connection', ws, request);
       });
       break;
     default:
@@ -306,6 +383,18 @@ wssAudio.on('connection', (ws) => {
   });
 });
 
+// Handle WAV audio streaming WebSocket connections
+wssWavAudio.on('connection', (ws) => {
+  console.log('New WAV audio streaming WebSocket client connected');
+  
+  ws.on('close', () => {
+    console.log('WAV audio streaming WebSocket client disconnected');
+  });
+  
+  // Send a connection confirmation message
+  ws.send(JSON.stringify({ status: 'connected', message: 'Ready to receive audio data' }));
+});
+
 function shutdown() {
   console.log('Shutting down server...');
   
@@ -313,6 +402,7 @@ function shutdown() {
   wssCamera.clients.forEach(client => client.close());
   wssTTS.clients.forEach(client => client.close());
   wssAudio.clients.forEach(client => client.close());
+  wssWavAudio.clients.forEach(client => client.close()); // Close WAV audio clients
 
   if (rclnodejs.isShutdown() === false) {
     rclnodejs.shutdown();

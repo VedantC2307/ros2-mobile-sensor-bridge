@@ -22,12 +22,12 @@
 
       .container {
         background: rgba(35, 35, 40, 0.95);
-        padding: 1.8rem;
-        border-radius: 12px;
+        padding: 2.5rem;
+        border-radius: 16px;
         box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6);
-        max-width: 650px;
-        width: 95%;
-        margin: 10px;
+        max-width: 600px;
+        width: 90%;
+        margin: 20px;
         backdrop-filter: blur(10px);
         -webkit-backdrop-filter: blur(10px);
         border: 1px solid rgba(255, 255, 255, 0.08);
@@ -35,8 +35,8 @@
 
       .title {
         text-align: center;
-        margin-bottom: 1.5rem;
-        font-size: 24px;
+        margin-bottom: 2rem;
+        font-size: 32px;
         font-weight: 600;
         background: linear-gradient(90deg, #64B5F6, #E040FB);
         -webkit-background-clip: text;
@@ -46,13 +46,13 @@
       }
 
       .sensor-section {
-        margin-bottom: 15px;
+        margin-bottom: 20px;
       }
 
       .section-title {
-        font-size: 16px;
+        font-size: 18px;
         font-weight: 500;
-        margin-bottom: 8px;
+        margin-bottom: 12px;
         color: #90CAF9;
       }
 
@@ -65,8 +65,8 @@
       .sensor-select label {
         display: flex;
         align-items: center;
-        padding: 1rem 1.2rem;
-        margin: 0.6rem 0;
+        padding: 1rem 1.5rem;
+        margin: 0.8rem 0;
         background: rgba(50, 50, 60, 0.6);
         border-radius: 10px;
         cursor: pointer;
@@ -77,8 +77,8 @@
 
       .sensor-select label:hover {
         background: rgba(70, 70, 80, 0.7);
-        transform: translateY(-1px);
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
       }
 
       .sensor-checkbox-container {
@@ -89,12 +89,12 @@
       .sensor-select input[type="checkbox"] {
         appearance: none;
         -webkit-appearance: none;
-        width: 18px;
-        height: 18px;
+        width: 22px;
+        height: 22px;
         background: rgba(30, 30, 35, 0.9);
         border: 2px solid rgba(255, 255, 255, 0.3);
-        border-radius: 4px;
-        margin-right: 12px;
+        border-radius: 5px;
+        margin-right: 15px;
         position: relative;
         cursor: pointer;
         transition: all 0.2s ease;
@@ -109,37 +109,37 @@
         content: '✓';
         position: absolute;
         color: white;
-        font-size: 14px;
+        font-size: 16px;
         top: 50%;
         left: 50%;
         transform: translate(-50%, -50%);
       }
 
       .sensor-name {
-        font-size: 15px;
+        font-size: 17px;
         font-weight: 500;
       }
 
       #xr-button {
         width: 100%;
-        padding: 0.9rem;
-        font-size: 18px;
-        margin-top: 1.5rem;
+        padding: 1.2rem;
+        font-size: 20px;
+        margin-top: 2rem;
         background: linear-gradient(90deg, #4CAF50, #2E7D32);
         border: none;
-        border-radius: 8px;
+        border-radius: 10px;
         color: white;
         cursor: pointer;
         transition: all 0.3s ease;
         font-weight: 600;
         letter-spacing: 0.5px;
-        box-shadow: 0 4px 10px rgba(46, 125, 50, 0.4);
+        box-shadow: 0 4px 15px rgba(46, 125, 50, 0.4);
       }
 
       #xr-button:hover {
         background: linear-gradient(90deg, #66BB6A, #388E3C);
         transform: translateY(-2px);
-        box-shadow: 0 6px 15px rgba(46, 125, 50, 0.5);
+        box-shadow: 0 8px 20px rgba(46, 125, 50, 0.5);
       }
 
       #xr-button:active {
@@ -157,27 +157,27 @@
       /* Connection status indicator styles */
       .connection-status {
         display: inline-block;
-        width: 12px;
-        height: 12px;
+        width: 14px;
+        height: 14px;
         border-radius: 50%;
-        margin-left: 8px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
+        margin-left: 10px;
+        border: 2px solid rgba(255, 255, 255, 0.1);
         transition: all 0.3s ease;
       }
       
       .connected { 
         background: #43A047; 
-        box-shadow: 0 0 6px rgba(67, 160, 71, 0.6);
+        box-shadow: 0 0 8px rgba(67, 160, 71, 0.6);
       }
       
       .disconnected { 
         background: #E53935; 
-        box-shadow: 0 0 6px rgba(229, 57, 53, 0.6);
+        box-shadow: 0 0 8px rgba(229, 57, 53, 0.6);
       }
       
       .connecting { 
         background: #FB8C00;
-        box-shadow: 0 0 6px rgba(251, 140, 0, 0.6);
+        box-shadow: 0 0 8px rgba(251, 140, 0, 0.6);
         animation: pulse 1.5s infinite;
       }
       
@@ -190,18 +190,17 @@
       #pose {
         display: none;
         background: rgba(35, 35, 40, 0.8);
-        padding: 12px;
-        border-radius: 8px;
+        padding: 16px;
+        border-radius: 10px;
         font-family: 'Courier New', monospace;
-        font-size: 14px;
-        line-height: 1.4;
-        margin-top: 15px;
+        font-size: 16px;
+        line-height: 1.5;
+        margin-top: 20px;
         border: 1px solid rgba(255, 255, 255, 0.1);
         max-width: 600px;
         width: 90%;
         text-align: left;
-        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
-        overflow-x: auto;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
       }
 
       /* Show them only when session is active */
@@ -222,53 +221,53 @@
       
       #transcription-log {
         position: fixed;
-        bottom: 15px;
-        left: 15px;
-        right: 15px;
-        max-height: 120px;
+        bottom: 20px;
+        left: 20px;
+        right: 20px;
+        max-height: 150px;
         overflow-y: auto;
         background: rgba(20, 20, 25, 0.85);
-        padding: 12px;
-        border-radius: 10px;
-        font-size: 14px;
-        line-height: 1.4;
+        padding: 16px;
+        border-radius: 12px;
+        font-size: 16px;
+        line-height: 1.5;
         z-index: 1000;
         backdrop-filter: blur(5px);
         -webkit-backdrop-filter: blur(5px);
         border: 1px solid rgba(255, 255, 255, 0.1);
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
         display: none;
       }
       
       .log-entry {
-        margin: 6px 0;
+        margin: 8px 0;
         border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        padding-bottom: 6px;
+        padding-bottom: 8px;
       }
       
       .timestamp {
         color: #90CAF9;
         font-size: 0.8em;
-        margin-right: 8px;
+        margin-right: 10px;
         font-weight: 500;
       }
       
       #wav-status {
-        padding: 8px 12px;
-        margin: 8px 0;
+        padding: 10px 15px;
+        margin: 10px 0;
         font-size: 0.9em;
         color: #BBDEFB;
         background: rgba(50, 50, 60, 0.4);
-        border-radius: 6px;
+        border-radius: 8px;
         border: 1px solid rgba(255, 255, 255, 0.05);
       }
       
       /* Camera select dropdown styling - modified to be inline */
       .camera-select-container {
-        margin-top: 12px;
-        padding: 10px 12px;
+        margin-top: 15px;
+        padding: 12px 15px;
         background: rgba(50, 50, 60, 0.4);
-        border-radius: 6px;
+        border-radius: 8px;
         border: 1px solid rgba(255, 255, 255, 0.05);
         display: flex;
         align-items: center;
@@ -278,16 +277,16 @@
       
       #camera-dropdown {
         flex: 1;
-        min-width: 160px;
-        padding: 8px;
+        min-width: 180px;
+        padding: 10px;
         background: rgba(35, 35, 40, 0.9);
         color: white;
         border: 1px solid rgba(255, 255, 255, 0.2);
-        border-radius: 5px;
-        font-size: 14px;
+        border-radius: 6px;
+        font-size: 16px;
         cursor: pointer;
         transition: all 0.3s ease;
-        margin-left: 10px;
+        margin-left: 15px;
       }
       
       #camera-dropdown:hover {
@@ -304,13 +303,13 @@
       #camera-dropdown option {
         background: rgba(35, 35, 40, 0.9);
         color: white;
-        padding: 8px;
+        padding: 10px;
       }
       
       .camera-label {
         font-weight: 500;
         color: #BBDEFB;
-        font-size: 14px;
+        margin-right: 5px;
       }
 
       /* Media query for small screens to stack the dropdown */
@@ -322,67 +321,8 @@
         
         #camera-dropdown {
           margin-left: 0;
-          margin-top: 8px;
+          margin-top: 10px;
           width: 100%;
-        }
-        
-        .title {
-          font-size: 20px;
-          margin-bottom: 1rem;
-        }
-        
-        .container {
-          padding: 1.2rem;
-          margin: 8px;
-          width: 99%;
-        }
-        
-        #xr-button {
-          padding: 0.9rem;
-          font-size: 16px;
-        }
-        
-        .sensor-select label {
-          padding: 0.8rem 0.9rem;
-        }
-        
-        .section-title {
-          font-size: 15px;
-        }
-      }
-      
-      /* Additional responsive adjustments for very small screens */
-      @media (max-width: 360px) {
-        .container {
-          padding: 1rem;
-          width: 99%;
-        }
-        
-        .title {
-          font-size: 18px;
-        }
-        
-        .sensor-name {
-          font-size: 14px;
-        }
-        
-        .sensor-select label {
-          padding: 0.7rem 0.8rem;
-        }
-        
-        .sensor-select input[type="checkbox"] {
-          width: 16px;
-          height: 16px;
-          margin-right: 8px;
-        }
-        
-        .camera-label {
-          font-size: 13px;
-        }
-        
-        #camera-dropdown {
-          font-size: 13px;
-          padding: 6px;
         }
       }
     </style>
@@ -408,7 +348,7 @@
             <div class="connection-status" id="camera-status"></div>
           </label>
           
-          <!-- Camera selection dropdown integrated directly into camera option -->
+          <!-- Modified camera selection dropdown to be inline -->
           <div class="camera-select-container" id="camera-select-container">
             <label class="camera-label" for="camera-dropdown">Select Camera:</label>
             <select id="camera-dropdown"></select>

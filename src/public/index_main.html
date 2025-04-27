@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html style="background-color: #121212; color: white;">
+<html style="background-color: black; color: white;">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,9 +10,9 @@
       body, html {
         margin: 0;
         padding: 0;
-        background-color: #121212;
+        background-color: black;
         color: white;
-        font-family: 'Segoe UI', Roboto, Arial, sans-serif;
+        font-family: Arial, sans-serif;
         height: 100%;
         display: flex;
         flex-direction: column;
@@ -21,39 +21,18 @@
       }
 
       .container {
-        background: rgba(35, 35, 40, 0.95);
-        padding: 1.8rem;
+        background: rgba(30, 30, 30, 0.9);
+        padding: 2.1rem;
         border-radius: 12px;
-        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6);
-        max-width: 650px;
-        width: 95%;
-        margin: 10px;
-        backdrop-filter: blur(10px);
-        -webkit-backdrop-filter: blur(10px);
-        border: 1px solid rgba(255, 255, 255, 0.08);
+        box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+        max-width: 500px; /* Increased from 500px */
+        width: 95%; /* Increased from 90% */
       }
 
       .title {
         text-align: center;
-        margin-bottom: 1.5rem;
-        font-size: 24px;
-        font-weight: 600;
-        background: linear-gradient(90deg, #64B5F6, #E040FB);
-        -webkit-background-clip: text;
-        background-clip: text;
-        -webkit-text-fill-color: transparent;
-        letter-spacing: 0.5px;
-      }
-
-      .sensor-section {
-        margin-bottom: 15px;
-      }
-
-      .section-title {
-        font-size: 16px;
-        font-weight: 500;
-        margin-bottom: 8px;
-        color: #90CAF9;
+        margin-bottom: 2rem;
+        font-size: 28px; /* Increased from 24px */
       }
 
       .sensor-select {
@@ -65,143 +44,48 @@
       .sensor-select label {
         display: flex;
         align-items: center;
-        padding: 1rem 1.2rem;
-        margin: 0.6rem 0;
-        background: rgba(50, 50, 60, 0.6);
-        border-radius: 10px;
+        padding: 1rem;
+        margin: 0.5rem 0;
+        background: rgba(50, 50, 50, 0.5);
+        border-radius: 5px;
         cursor: pointer;
-        transition: all 0.3s ease;
-        justify-content: space-between;
-        border: 1px solid rgba(255, 255, 255, 0.05);
+        transition: background 0.3s;
       }
 
       .sensor-select label:hover {
-        background: rgba(70, 70, 80, 0.7);
-        transform: translateY(-1px);
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-      }
-
-      .sensor-checkbox-container {
-        display: flex;
-        align-items: center;
+        background: rgba(70, 70, 70, 0.5);
       }
 
       .sensor-select input[type="checkbox"] {
-        appearance: none;
-        -webkit-appearance: none;
-        width: 18px;
-        height: 18px;
-        background: rgba(30, 30, 35, 0.9);
-        border: 2px solid rgba(255, 255, 255, 0.3);
-        border-radius: 4px;
-        margin-right: 12px;
-        position: relative;
-        cursor: pointer;
-        transition: all 0.2s ease;
-      }
-
-      .sensor-select input[type="checkbox"]:checked {
-        background: #4CAF50;
-        border-color: #4CAF50;
-      }
-
-      .sensor-select input[type="checkbox"]:checked::after {
-        content: '✓';
-        position: absolute;
-        color: white;
-        font-size: 14px;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-      }
-
-      .sensor-name {
-        font-size: 15px;
-        font-weight: 500;
+        margin-right: 15px;
+        transform: scale(1.5);
       }
 
       #xr-button {
         width: 100%;
-        padding: 0.9rem;
-        font-size: 18px;
-        margin-top: 1.5rem;
-        background: linear-gradient(90deg, #4CAF50, #2E7D32);
+        padding: 1rem;
+        font-size: 20px;
+        margin-top: 2rem;
+        background: #4CAF50;
         border: none;
-        border-radius: 8px;
+        border-radius: 5px;
         color: white;
         cursor: pointer;
-        transition: all 0.3s ease;
-        font-weight: 600;
-        letter-spacing: 0.5px;
-        box-shadow: 0 4px 10px rgba(46, 125, 50, 0.4);
+        transition: background 0.3s;
       }
 
       #xr-button:hover {
-        background: linear-gradient(90deg, #66BB6A, #388E3C);
-        transform: translateY(-2px);
-        box-shadow: 0 6px 15px rgba(46, 125, 50, 0.5);
-      }
-
-      #xr-button:active {
-        transform: translateY(1px);
+        background: #45a049;
       }
 
       #xr-button:disabled {
-        background: linear-gradient(90deg, #9E9E9E, #757575);
+        background: #cccccc;
         cursor: not-allowed;
-        transform: none;
-        box-shadow: none;
-        opacity: 0.7;
       }
 
-      /* Connection status indicator styles */
-      .connection-status {
-        display: inline-block;
-        width: 12px;
-        height: 12px;
-        border-radius: 50%;
-        margin-left: 8px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        transition: all 0.3s ease;
-      }
-      
-      .connected { 
-        background: #43A047; 
-        box-shadow: 0 0 6px rgba(67, 160, 71, 0.6);
-      }
-      
-      .disconnected { 
-        background: #E53935; 
-        box-shadow: 0 0 6px rgba(229, 57, 53, 0.6);
-      }
-      
-      .connecting { 
-        background: #FB8C00;
-        box-shadow: 0 0 6px rgba(251, 140, 0, 0.6);
-        animation: pulse 1.5s infinite;
-      }
-      
-      @keyframes pulse {
-        0% { opacity: 1; }
-        50% { opacity: 0.5; }
-        100% { opacity: 1; }
-      }
-
-      #pose {
+      /* Hide pose and transcription initially */
+      #pose, #transcription-log {
         display: none;
-        background: rgba(35, 35, 40, 0.8);
-        padding: 12px;
-        border-radius: 8px;
-        font-family: 'Courier New', monospace;
-        font-size: 14px;
-        line-height: 1.4;
-        margin-top: 15px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        max-width: 600px;
-        width: 90%;
-        text-align: left;
-        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
-        overflow-x: auto;
       }
 
       /* Show them only when session is active */
@@ -216,174 +100,53 @@
         left: 0;
         width: 100%;
         height: 100%;
-        background-color: #121212;
-        z-index: -1;
+        background-color: black;
+        z-index: -1;  /* Place behind the button and pose text */
       }
-      
       #transcription-log {
         position: fixed;
-        bottom: 15px;
-        left: 15px;
-        right: 15px;
-        max-height: 120px;
+        bottom: 20px;
+        left: 20px;
+        right: 20px;
+        max-height: 150px;
         overflow-y: auto;
-        background: rgba(20, 20, 25, 0.85);
-        padding: 12px;
-        border-radius: 10px;
-        font-size: 14px;
+        background: rgba(0, 0, 0, 0.7);
+        padding: 10px;
+        border-radius: 5px;
+        font-size: 16px;
         line-height: 1.4;
         z-index: 1000;
-        backdrop-filter: blur(5px);
-        -webkit-backdrop-filter: blur(5px);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
-        display: none;
       }
-      
       .log-entry {
-        margin: 6px 0;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        padding-bottom: 6px;
+        margin: 5px 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+        padding-bottom: 5px;
       }
-      
       .timestamp {
-        color: #90CAF9;
+        color: #888;
         font-size: 0.8em;
-        margin-right: 8px;
-        font-weight: 500;
+        margin-right: 10px;
       }
       
-      #wav-status {
-        padding: 8px 12px;
-        margin: 8px 0;
-        font-size: 0.9em;
-        color: #BBDEFB;
-        background: rgba(50, 50, 60, 0.4);
-        border-radius: 6px;
-        border: 1px solid rgba(255, 255, 255, 0.05);
+      /* Add connection status indicator styles */
+      .connection-status {
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        margin-left: auto;
+        background: #ccc;
       }
-      
-      /* Camera select dropdown styling - modified to be inline */
-      .camera-select-container {
-        margin-top: 12px;
-        padding: 10px 12px;
-        background: rgba(50, 50, 60, 0.4);
-        border-radius: 6px;
-        border: 1px solid rgba(255, 255, 255, 0.05);
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        flex-wrap: wrap;
+      .connected { background: #4CAF50; }
+      .disconnected { background: #f44336; }
+      .connecting { 
+        background: #ff9800;
+        animation: pulse 1.5s infinite;
       }
-      
-      #camera-dropdown {
-        flex: 1;
-        min-width: 160px;
-        padding: 8px;
-        background: rgba(35, 35, 40, 0.9);
-        color: white;
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        border-radius: 5px;
-        font-size: 14px;
-        cursor: pointer;
-        transition: all 0.3s ease;
-        margin-left: 10px;
-      }
-      
-      #camera-dropdown:hover {
-        background: rgba(45, 45, 50, 0.9);
-        border-color: rgba(255, 255, 255, 0.3);
-      }
-      
-      #camera-dropdown:focus {
-        outline: none;
-        border-color: #90CAF9;
-        box-shadow: 0 0 0 2px rgba(144, 202, 249, 0.3);
-      }
-      
-      #camera-dropdown option {
-        background: rgba(35, 35, 40, 0.9);
-        color: white;
-        padding: 8px;
-      }
-      
-      .camera-label {
-        font-weight: 500;
-        color: #BBDEFB;
-        font-size: 14px;
-      }
-
-      /* Media query for small screens to stack the dropdown */
-      @media (max-width: 480px) {
-        .camera-select-container {
-          flex-direction: column;
-          align-items: flex-start;
-        }
-        
-        #camera-dropdown {
-          margin-left: 0;
-          margin-top: 8px;
-          width: 100%;
-        }
-        
-        .title {
-          font-size: 20px;
-          margin-bottom: 1rem;
-        }
-        
-        .container {
-          padding: 1.2rem;
-          margin: 8px;
-          width: 99%;
-        }
-        
-        #xr-button {
-          padding: 0.9rem;
-          font-size: 16px;
-        }
-        
-        .sensor-select label {
-          padding: 0.8rem 0.9rem;
-        }
-        
-        .section-title {
-          font-size: 15px;
-        }
-      }
-      
-      /* Additional responsive adjustments for very small screens */
-      @media (max-width: 360px) {
-        .container {
-          padding: 1rem;
-          width: 99%;
-        }
-        
-        .title {
-          font-size: 18px;
-        }
-        
-        .sensor-name {
-          font-size: 14px;
-        }
-        
-        .sensor-select label {
-          padding: 0.7rem 0.8rem;
-        }
-        
-        .sensor-select input[type="checkbox"] {
-          width: 16px;
-          height: 16px;
-          margin-right: 8px;
-        }
-        
-        .camera-label {
-          font-size: 13px;
-        }
-        
-        #camera-dropdown {
-          font-size: 13px;
-          padding: 6px;
-        }
+      @keyframes pulse {
+        0% { opacity: 1; }
+        50% { opacity: 0.5; }
+        100% { opacity: 1; }
       }
     </style>
     <!-- Remove static script imports -->
@@ -396,59 +159,32 @@
     
     <div class="container">
       <div class="title">Sensor Interface</div>
-      
-      <div class="sensor-section">
-        <div class="section-title">Input Sensors</div>
-        <div class="sensor-select">
-          <label>
-            <div class="sensor-checkbox-container">
-              <input type="checkbox" id="camera-select" checked>
-              <span class="sensor-name">Camera Stream</span>
-            </div>
-            <div class="connection-status" id="camera-status"></div>
-          </label>
-          
-          <!-- Camera selection dropdown integrated directly into camera option -->
-          <div class="camera-select-container" id="camera-select-container">
-            <label class="camera-label" for="camera-dropdown">Select Camera:</label>
-            <select id="camera-dropdown"></select>
-          </div>
-          
-          <label>
-            <div class="sensor-checkbox-container">
-              <input type="checkbox" id="pose-select" checked>
-              <span class="sensor-name">3D Position</span>
-            </div>
-            <div class="connection-status" id="pose-status"></div>
-          </label>
-          
-          <label>
-            <div class="sensor-checkbox-container">
-              <input type="checkbox" id="audio-select" checked>
-              <span class="sensor-name">Microphone</span>
-            </div>
-            <div class="connection-status" id="audio-status"></div>
-          </label>
-        </div>
-      </div>
-      
-      <div class="sensor-section">
-        <div class="section-title">Output</div>
-        <div class="sensor-select">
-          <label>
-            <div class="sensor-checkbox-container">
-              <input type="checkbox" id="tts-select" checked>
-              <span class="sensor-name">Audio</span>
-            </div>
-            <div class="connection-status" id="tts-status"></div>
-          </label>
-        </div>
+      <div class="sensor-select">
+        <label>
+          <input type="checkbox" id="camera-select" checked>
+          Camera Stream
+          <div class="connection-status" id="camera-status"></div>
+        </label>
+        <label>
+          <input type="checkbox" id="pose-select" checked>
+          3D Position
+          <div class="connection-status" id="pose-status"></div>
+        </label>
+        <label>
+          <input type="checkbox" id="audio-select" checked>
+          Microphone
+          <div class="connection-status" id="audio-status"></div>
+        </label>
+        <label>
+          <input type="checkbox" id="tts-select" checked>
+          Audio
+          <div class="connection-status" id="tts-status"></div>
+        </label>
         <!-- Add this status indicator for WAV audio -->
-        <div id="wav-status" style="display: none;">
+        <div id="wav-status" style="padding: 5px 10px; margin: 5px 0; font-size: 0.8em; color: #999;">
           <!-- <span>WAV Audio: <span id="wav-status-text">Initializing...</span></span> -->
         </div>
       </div>
-      
       <button id="xr-button" disabled>XR not found</button>
     </div>
 
@@ -456,49 +192,7 @@
     <div id="transcription-log"></div>
 
     <script>
-      // Add a function to populate camera dropdown
-      async function populateCameraDropdown() {
-        try {
-          const dropdown = document.getElementById('camera-dropdown');
-          if (!dropdown) return;
-          
-          // Clear existing options
-          dropdown.innerHTML = '';
-          
-          // Get available cameras
-          const devices = await navigator.mediaDevices.enumerateDevices();
-          const videoDevices = devices.filter(device => device.kind === 'videoinput');
-          
-          if (videoDevices.length === 0) {
-            const option = document.createElement('option');
-            option.text = 'No cameras found';
-            dropdown.add(option);
-            return;
-          }
-          
-          // Add options for each camera
-          videoDevices.forEach((device, index) => {
-            const option = document.createElement('option');
-            option.value = device.deviceId;
-            option.text = device.label || `Camera ${index + 1}`;
-            dropdown.add(option);
-          });
-          
-          // Add event listener to handle camera change
-          dropdown.addEventListener('change', (e) => {
-            if (cameraManager && typeof cameraManager.switchCamera === 'function') {
-              cameraManager.switchCamera(e.target.value);
-            }
-          });
-          
-          // Show container if we have cameras
-          document.getElementById('camera-select-container').style.display = videoDevices.length > 0 ? 'flex' : 'none';
-        } catch (error) {
-          console.error('Error populating camera dropdown:', error);
-        }
-      }
-      
-      // Function to dynamically load audio script based on config
+      // Add a function to dynamically load audio script based on config
       async function loadAudioScript() {
         try {
           const response = await fetch('/api/config');
@@ -537,10 +231,7 @@
       }
       
       // Load the appropriate audio script before starting
-      document.addEventListener('DOMContentLoaded', () => {
-        loadAudioScript();
-        populateCameraDropdown();
-      });
+      document.addEventListener('DOMContentLoaded', loadAudioScript);
       
       let xrSession = null;
       let xrRefSpace = null;
@@ -553,8 +244,8 @@
       const cameraManager = new CameraManager();
       const audioManager = new AudioManager();
       let audioWs = null;
-      let cameraInterval = null;
-      let cameraSendingActive = false;
+      let cameraInterval = null;  // Add missing cameraInterval variable
+      let cameraSendingActive = false;  // Add missing cameraSendingActive variable
 
       // Add sensor selection states
       let enabledSensors = {
@@ -567,7 +258,6 @@
       // Add checkbox event listeners
       document.getElementById('camera-select').addEventListener('change', (e) => {
         enabledSensors.camera = e.target.checked;
-        document.getElementById('camera-select-container').style.display = e.target.checked ? 'flex' : 'none';
         if (!e.target.checked && cameraInterval) {
           stopCameraSending();
         } else if (e.target.checked && isSessionActive) {
@@ -990,111 +680,6 @@
         while (transcriptionLog.children.length > 50) {
           transcriptionLog.removeChild(transcriptionLog.firstChild);
         }
-      }
-      
-      // Add missing function for reconnecting pose WebSocket
-      function connectPoseWebSocket() {
-        if (!isSessionActive) return;
-        
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const baseUrl = `${protocol}//${window.location.host}`;
-        
-        poseWs = new WebSocket(`${baseUrl}/pose`);
-        poseWs.onopen = () => {
-          console.log('Pose WebSocket reconnected');
-          updateConnectionStatus('pose', 'connected');
-        };
-        poseWs.onerror = (error) => {
-          console.error('Pose WebSocket error:', error);
-          updateConnectionStatus('pose', 'disconnected');
-        };
-        poseWs.onclose = () => {
-          updateConnectionStatus('pose', 'disconnected');
-          if (isSessionActive) {
-            setTimeout(() => {
-              if (enabledSensors.pose && isSessionActive) {
-                updateConnectionStatus('pose', 'connecting');
-                connectPoseWebSocket();
-              }
-            }, 1000);
-          }
-        };
-      }
-      
-      // Add missing function for reconnecting camera WebSocket
-      function connectCameraWebSocket() {
-        if (!isSessionActive) return;
-        
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const baseUrl = `${protocol}//${window.location.host}`;
-        
-        cameraWs = new WebSocket(`${baseUrl}/camera`);
-        window.cameraWs = cameraWs;
-        
-        cameraWs.onopen = () => {
-          console.log('Camera WebSocket reconnected');
-          updateConnectionStatus('camera', 'connected');
-          if (!cameraInterval && isSessionActive) {
-            startCameraSending();
-          }
-        };
-        cameraWs.onerror = (error) => {
-          console.error('Camera WebSocket error:', error);
-          updateConnectionStatus('camera', 'disconnected');
-        };
-        cameraWs.onclose = () => {
-          updateConnectionStatus('camera', 'disconnected');
-          window.cameraWs = null;
-          if (isSessionActive) {
-            setTimeout(() => {
-              if (enabledSensors.camera && isSessionActive) {
-                updateConnectionStatus('camera', 'connecting');
-                connectCameraWebSocket();
-              }
-            }, 1000);
-          }
-        };
-      }
-      
-      // Add missing function for reconnecting audio WebSocket
-      function connectAudioWebSocket() {
-        if (!isSessionActive) return;
-        
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const baseUrl = `${protocol}//${window.location.host}`;
-        
-        audioWs = new WebSocket(`${baseUrl}/audio`);
-        audioWs.onopen = () => {
-          console.log('Audio WebSocket reconnected');
-          updateConnectionStatus('audio', 'connected');
-          audioManager.startAudio(audioWs, isSessionActive);
-        };
-        audioWs.onerror = (error) => {
-          console.error('Audio WebSocket error:', error);
-          updateConnectionStatus('audio', 'disconnected');
-        };
-        audioWs.onclose = () => {
-          updateConnectionStatus('audio', 'disconnected');
-          if (isSessionActive) {
-            setTimeout(() => {
-              if (enabledSensors.audio && isSessionActive) {
-                updateConnectionStatus('audio', 'connecting');
-                connectAudioWebSocket();
-              }
-            }, 1000);
-          }
-        };
-        
-        audioWs.onmessage = (event) => {
-          try {
-            const data = JSON.parse(event.data);
-            if (data.transcription) {
-              addTranscriptionEntry(data.transcription);
-            }
-          } catch (error) {
-            console.error('Error parsing audio response:', error);
-          }
-        };
       }
     </script>
   </body>
