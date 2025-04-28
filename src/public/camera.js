@@ -4,14 +4,32 @@ class CameraManager {
         this.videoTrack = null;
         this.lastCameraFrame = null;
         this.cameraConfig = {
-            facingMode: "environment" // Default value until config is loaded
+            facingMode: "environment", // Default value until config is loaded
+            quality: 0.7,  // Default quality until config is loaded
+            fps: 20       // Default fps until config is loaded
         };
         this.availableCameras = [];
         this.selectedCameraId = null;
         this.devicePermissionGranted = false;
+        this.videoElement = null;
+        this.isSafari = this.detectSafari();
+        this._captureInterval = null;
+        this._processorRunning = false;
+        // Fixed dimensions that are consistent across all capture methods
+        this.fixedWidth = 480;
+        this.fixedHeight = 640;
         
         // Fetch camera configuration when created
         this.fetchCameraConfig();
+    }
+    
+    // Detect Safari browser (including iOS Safari)
+    detectSafari() {
+        const ua = navigator.userAgent.toLowerCase();
+        const isSafari = (ua.indexOf('safari') !== -1 && ua.indexOf('chrome') === -1) || 
+                         /iphone|ipod|ipad/i.test(ua);
+        console.log('Browser detected as ' + (isSafari ? 'Safari/iOS' : 'Chrome/Android'));
+        return isSafari;
     }
     
     // New method to scan for available cameras but not create UI elements
@@ -161,13 +179,33 @@ class CameraManager {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
             const config = await response.json();
+            
+            // Set facing mode if available
             if (config.camera && config.camera.facingMode) {
                 this.cameraConfig.facingMode = config.camera.facingMode;
                 console.log('Using camera facing mode from config:', this.cameraConfig.facingMode);
             }
+            
+            if (config.camera) {
+                if (config.camera.quality !== undefined) {
+                    this.cameraConfig.quality = parseFloat(config.camera.quality);
+                    console.log('Using camera quality from config:', this.cameraConfig.quality);
+                } else if (config.camera.quaity !== undefined) {
+                    // Fallback for the current typo in the config file
+                    this.cameraConfig.quality = parseFloat(config.camera.quaity);
+                    console.log('Using camera quality from config (with typo):', this.cameraConfig.quality);
+                }
+            }
+            
+            // Set fps if available, with maximum of 30
+            if (config.camera && config.camera.fps !== undefined) {
+                // Apply the maximum 30 fps limit
+                this.cameraConfig.fps = Math.min(parseInt(config.camera.fps), 30);
+                console.log('Using camera fps from config (limited to 30 max):', this.cameraConfig.fps);
+            }
         } catch (error) {
             console.error('Failed to load camera config:', error);
-            // Keep using the default
+            // Keep using the defaults
         }
     }
 
@@ -226,71 +264,15 @@ class CameraManager {
                 }
             }
 
-            const trackProcessor = new MediaStreamTrackProcessor({ track: this.videoTrack });
-            const reader = trackProcessor.readable.getReader();
-
-            // Create canvas once for reuse
-            const canvas = new OffscreenCanvas(640, 480); // Fixed size for performance
-            const ctx = canvas.getContext('2d');
-
-            let lastSentTime = 0;
-            const desiredFps = 30;
-            const frameInterval = 1000 / desiredFps;
-
-            async function processFrame(videoFrame) {
-                const bitmap = await createImageBitmap(videoFrame);
-                
-                // Scale to fit canvas while maintaining aspect ratio
-                const scale = Math.min(canvas.width / bitmap.width, canvas.height / bitmap.height);
-                const x = (canvas.width - bitmap.width * scale) / 2;
-                const y = (canvas.height - bitmap.height * scale) / 2;
-                
-                // Clear canvas and draw scaled image
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                ctx.drawImage(bitmap, x, y, bitmap.width * scale, bitmap.height * scale);
-                
-                // Convert to JPEG blob
-                const blob = await canvas.convertToBlob({
-                    type: 'image/jpeg',
-                    quality: 0.7
-                });
-                
-                // Convert blob to base64
-                const buffer = await blob.arrayBuffer();
-                const base64 = btoa(String.fromCharCode(...new Uint8Array(buffer)));
-                return `data:image/jpeg;base64,${base64}`;
+            // Choose appropriate method based on browser support
+            if (!this.isSafari && typeof MediaStreamTrackProcessor === 'function') {
+                // Use MediaStreamTrackProcessor for Chrome/Android
+                this.startCameraWithTrackProcessor(stream, ws);
+            } else {
+                // Use fallback for Safari/iOS
+                this.startCameraWithFallback(stream, ws);
             }
 
-            const processFrames = async () => {
-                while (true) {
-                    const { done, value: videoFrame } = await reader.read();
-                    if (done) break;
-
-                    const currentTime = performance.now();
-                    if (currentTime - lastSentTime < frameInterval) {
-                        videoFrame.close();
-                        continue;
-                    }
-
-                    if (ws && ws.readyState === WebSocket.OPEN) {
-                        try {
-                            this.lastCameraFrame = await processFrame(videoFrame);
-                            ws.send(JSON.stringify({
-                                timestamp: Date.now(),
-                                camera: this.lastCameraFrame,
-                                width: canvas.width,
-                                height: canvas.height
-                            }));
-                            lastSentTime = currentTime;
-                        } catch (err) {
-                            console.error('Frame processing error:', err);
-                        }
-                    }
-                    videoFrame.close();
-                }
-            };
-
-            processFrames().catch(console.error);
             this.cameraStarted = true;
         } catch (err) {
             console.error('Camera error:', err);
@@ -298,13 +280,295 @@ class CameraManager {
         }
     }
 
+    // Method for Chrome/Android using MediaStreamTrackProcessor
+    startCameraWithTrackProcessor(stream, ws) {
+        console.log('Using MediaStreamTrackProcessor for camera streaming');
+        
+        // Ensure only one processor is running at a time
+        if (this._processorRunning) {
+            console.log('TrackProcessor already running, not starting another one');
+            return;
+        }
+        
+        try {
+            const trackProcessor = new MediaStreamTrackProcessor({ track: this.videoTrack });
+            const reader = trackProcessor.readable.getReader();
+
+            // Use consistent dimensions
+            console.log(`Creating OffscreenCanvas with dimensions: ${this.fixedWidth}x${this.fixedHeight}`);
+            const canvas = new OffscreenCanvas(this.fixedWidth, this.fixedHeight);
+            const ctx = canvas.getContext('2d');
+
+            let lastSentTime = 0;
+            const desiredFps = Math.min(this.cameraConfig.fps, 30);
+            const frameInterval = 1000 / desiredFps;
+            
+            // Mark processor as running
+            this._processorRunning = true;
+
+            const processFrame = async (videoFrame) => {
+                try {
+                    const bitmap = await createImageBitmap(videoFrame);
+                    
+                    // Scale to fit canvas while maintaining aspect ratio
+                    const scale = Math.min(canvas.width / bitmap.width, canvas.height / bitmap.height);
+                    const x = (canvas.width - bitmap.width * scale) / 2;
+                    const y = (canvas.height - bitmap.height * scale) / 2;
+                    
+                    // Clear canvas and draw scaled image
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    ctx.drawImage(bitmap, x, y, bitmap.width * scale, bitmap.height * scale);
+                    
+                    // Clean up the bitmap after use
+                    bitmap.close();
+                    
+                    // Convert to JPEG blob using quality from config
+                    const blob = await canvas.convertToBlob({
+                        type: 'image/jpeg',
+                        quality: this.cameraConfig.quality
+                    });
+                    
+                    // Convert blob to base64
+                    return new Promise((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onloadend = () => resolve(reader.result);
+                        reader.onerror = reject;
+                        reader.readAsDataURL(blob);
+                    });
+                } catch (error) {
+                    console.error('Error processing frame:', error);
+                    throw error;
+                }
+            };
+
+            const processFrames = async () => {
+                while (this._processorRunning) {
+                    try {
+                        const { done, value: videoFrame } = await reader.read();
+                        if (done || !this._processorRunning) break;
+
+                        const currentTime = performance.now();
+                        if (currentTime - lastSentTime < frameInterval) {
+                            videoFrame.close();
+                            continue;
+                        }
+
+                        if (ws && ws.readyState === WebSocket.OPEN) {
+                            try {
+                                this.lastCameraFrame = await processFrame(videoFrame);
+                                
+                                ws.send(JSON.stringify({
+                                    timestamp: Date.now(),
+                                    camera: this.lastCameraFrame,
+                                    width: this.fixedWidth,
+                                    height: this.fixedHeight
+                                }));
+                                lastSentTime = currentTime;
+                            } catch (err) {
+                                console.error('Frame processing error:', err);
+                            }
+                        }
+                        videoFrame.close();
+                    } catch (e) {
+                        console.error('Error reading video frame:', e);
+                        if (this._processorRunning) {
+                            // Only break if we're still meant to be running
+                            break;
+                        }
+                    }
+                }
+                
+                console.log('Track processor stopped');
+                this._processorRunning = false;
+            };
+
+            processFrames().catch(e => {
+                console.error('Process frames loop error:', e);
+                this._processorRunning = false;
+            });
+            
+        } catch (err) {
+            console.error('Error with TrackProcessor, falling back to compatibility mode:', err);
+            this._processorRunning = false;
+            // If TrackProcessor fails, fall back to the compatibility method
+            this.startCameraWithFallback(stream, ws);
+        }
+    }
+
+    // Fallback method for Safari/iOS using video+canvas approach
+    startCameraWithFallback(stream, ws) {
+        console.log('Using fallback method for camera streaming (Safari/iOS)');
+        
+        // Ensure only one capture interval is running
+        if (this._captureInterval) {
+            clearInterval(this._captureInterval);
+            this._captureInterval = null;
+            console.log('Cleared previous capture interval');
+        }
+        
+        // Create hidden video element if it doesn't exist
+        if (!this.videoElement) {
+            this.videoElement = document.createElement('video');
+            this.videoElement.style.display = 'none';
+            this.videoElement.style.position = 'absolute';
+            this.videoElement.style.left = '-9999px';
+            this.videoElement.muted = true;
+            this.videoElement.playsInline = true;
+            this.videoElement.autoplay = true;
+            document.body.appendChild(this.videoElement);
+        }
+        
+        // Use consistent dimensions
+        console.log(`Creating DOM canvas with dimensions: ${this.fixedWidth}x${this.fixedHeight}`);
+        const canvas = document.createElement('canvas');
+        canvas.width = this.fixedWidth;
+        canvas.height = this.fixedHeight;
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        
+        // Set video source to stream
+        this.videoElement.srcObject = stream;
+        
+        let lastSentTime = 0;
+        const desiredFps = Math.min(this.cameraConfig.fps, 30);
+        const frameInterval = 1000 / desiredFps;
+        
+        // For iOS Safari, we need to ensure video loads properly
+        const startCapturing = () => {
+            console.log('Starting video frame capture for iOS/Safari');
+            
+            // Set up interval to capture frames
+            const captureInterval = setInterval(() => {
+                try {
+                    const currentTime = performance.now();
+                    if (currentTime - lastSentTime < frameInterval) return;
+                    
+                    if (ws && ws.readyState === WebSocket.OPEN && 
+                        this.videoElement && 
+                        this.videoElement.readyState === this.videoElement.HAVE_ENOUGH_DATA) {
+                        
+                        // Draw current video frame to canvas
+                        const videoWidth = this.videoElement.videoWidth;
+                        const videoHeight = this.videoElement.videoHeight;
+                        
+                        if (videoWidth && videoHeight) {
+                            // Scale to fit canvas while maintaining aspect ratio
+                            const scale = Math.min(canvas.width / videoWidth, canvas.height / videoHeight);
+                            const x = (canvas.width - videoWidth * scale) / 2;
+                            const y = (canvas.height - videoHeight * scale) / 2;
+                            
+                            ctx.clearRect(0, 0, canvas.width, canvas.height);
+                            ctx.drawImage(this.videoElement, x, y, videoWidth * scale, videoHeight * scale);
+                            
+                            try {
+                                // Convert canvas to base64 JPEG using quality from config
+                                const dataUrl = canvas.toDataURL('image/jpeg', this.cameraConfig.quality);
+                                this.lastCameraFrame = dataUrl;
+                                
+                                ws.send(JSON.stringify({
+                                    timestamp: Date.now(),
+                                    camera: dataUrl,
+                                    width: this.fixedWidth,
+                                    height: this.fixedHeight
+                                }));
+                                lastSentTime = currentTime;
+                            } catch (canvasErr) {
+                                console.error('Canvas to dataURL error:', canvasErr);
+                            }
+                        }
+                    }
+                } catch (err) {
+                    console.error('Frame capture error:', err);
+                }
+            }, Math.floor(frameInterval / 2)); // Interval slightly faster than FPS to account for processing time
+            
+            // Store interval ID for cleanup
+            this._captureInterval = captureInterval;
+        };
+        
+        // Start video playback with proper error handling
+        const playPromise = this.videoElement.play();
+        if (playPromise !== undefined) {
+            playPromise
+                .then(() => {
+                    console.log('Video playback started for fallback camera method');
+                    
+                    // For iOS Safari, we need to wait a bit to make sure video is actually playing
+                    if (this.isSafari) {
+                        setTimeout(startCapturing, 500);
+                    } else {
+                        startCapturing();
+                    }
+                })
+                .catch(err => {
+                    console.error('Video playback failed:', err);
+                    
+                    // For iOS, video play must be initiated by user gesture
+                    if (this.isSafari) {
+                        console.log('Attempting alternative play method for iOS');
+                        
+                        // Create a temporary play button (iOS requires user interaction)
+                        const playButton = document.createElement('button');
+                        playButton.textContent = 'Start Camera';
+                        playButton.style.position = 'fixed';
+                        playButton.style.top = '50%';
+                        playButton.style.left = '50%';
+                        playButton.style.transform = 'translate(-50%, -50%)';
+                        playButton.style.zIndex = '9999';
+                        playButton.style.padding = '15px 30px';
+                        playButton.style.fontSize = '18px';
+                        document.body.appendChild(playButton);
+                        
+                        playButton.addEventListener('click', () => {
+                            this.videoElement.play()
+                                .then(() => {
+                                    console.log('Video playback started after user interaction');
+                                    startCapturing();
+                                    document.body.removeChild(playButton);
+                                })
+                                .catch(playErr => {
+                                    console.error('Video play failed even after user interaction:', playErr);
+                                    document.body.removeChild(playButton);
+                                });
+                        });
+                    }
+                });
+        } else {
+            console.log('Play promise not supported, starting capture immediately');
+            startCapturing();
+        }
+    }
+
     stopCamera() {
+        console.log('Stopping camera and cleaning up resources');
+        
+        // Stop track processor
+        this._processorRunning = false;
+        
         if (this.videoTrack) {
             this.videoTrack.stop();
             this.videoTrack = null;
+            console.log('Video track stopped');
         }
+        
+        // Clean up video element and interval for Safari fallback
+        if (this._captureInterval) {
+            clearInterval(this._captureInterval);
+            this._captureInterval = null;
+            console.log('Capture interval cleared');
+        }
+        
+        if (this.videoElement) {
+            if (this.videoElement.srcObject) {
+                const tracks = this.videoElement.srcObject.getTracks();
+                tracks.forEach(track => track.stop());
+                this.videoElement.srcObject = null;
+                console.log('Video element tracks stopped');
+            }
+        }
+        
         this.cameraStarted = false;
         this.lastCameraFrame = null;
+        console.log('Camera fully stopped');
     }
 
     getLastFrame() {

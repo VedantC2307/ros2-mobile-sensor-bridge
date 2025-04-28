@@ -1,12 +1,17 @@
-class AudioManager {
+class SpeechRecognitionManager {
     constructor() {
-        this.audioStarted = false;
+        this.speechRecognitionStarted = false;
         this.recognizer = null;
         this.keyword = "robot";
         this.finalTranscripts = "";
         this.transcriptionTimer = null;
         this.logDiv = document.getElementById('transcription-log');
-        console.log('Audio Manager initialized');
+        this.restartCount = 0;
+        this.maxRestarts = 3; // Limit number of rapid restarts
+        this.lastRestartTime = 0;
+        this.restartDelay = 5000; // 5 seconds between restart attempts to reduce noise
+        this.silentRestart = false; // Flag to control restart sound
+        console.log('Speech Recognition Manager initialized');
     }
 
     logTranscription(prompt) {
@@ -28,8 +33,8 @@ class AudioManager {
         }
     }
 
-    async startAudio(ws, isSessionActive) {
-        if (this.audioStarted || !isSessionActive) return;
+    async startSpeechRecognition(ws, isSessionActive) {
+        if (this.speechRecognitionStarted || !isSessionActive) return;
         
         if (!("webkitSpeechRecognition" in window)) {
             throw new Error('Speech Recognition API not supported');
@@ -40,9 +45,25 @@ class AudioManager {
             this.recognizer.continuous = true;
             this.recognizer.interimResults = false;
             this.recognizer.lang = "en-US";
+            
+            // Add property to control audio start feedback sound
+            this.silentRestart = true;
+            
+            // Enable continuous without the notification sound
+            if (SpeechRecognition && SpeechRecognition.prototype) {
+                try {
+                    // Some browsers may support this undocumented feature
+                    this.recognizer.audiostart = () => {
+                        console.log('Audio started');
+                    };
+                } catch (e) {
+                    console.log('AudioStart event not supported');
+                }
+            }
 
             this.recognizer.onstart = () => {
                 console.log('Speech recognition started');
+                this.restartCount = 0; // Reset restart counter on successful start
             };
 
             this.recognizer.onresult = (event) => {
@@ -76,7 +97,7 @@ class AudioManager {
                                             sec: Math.floor(now / 1000),
                                             nanosec: (now % 1000) * 1000000
                                         },
-                                        frame_id: 'audio_frame'
+                                        frame_id: 'microphone_frame'
                                     },
                                     transcription: prompt 
                                 }));
@@ -92,17 +113,56 @@ class AudioManager {
             this.recognizer.onerror = (event) => {
                 console.error('Recognition error:', event.error);
                 this.logTranscription(`Error: ${event.error}`);
+                
+                // Don't restart on certain errors
+                if (event.error === 'aborted' || event.error === 'not-allowed') {
+                    this.speechRecognitionStarted = false;
+                }
             };
 
             this.recognizer.onend = () => {
-                // Auto-restart if still active
-                if (this.audioStarted) {
-                    setTimeout(() => this.recognizer.start(), 10);
+                // Control auto-restart with delay to avoid constant "kudung" sounds
+                if (this.speechRecognitionStarted) {
+                    const now = Date.now();
+                    this.restartCount++;
+                    
+                    // If restarting too frequently, add increasing delays
+                    if (now - this.lastRestartTime < 1000) {
+                        // Restarting too quickly
+                        if (this.restartCount > this.maxRestarts) {
+                            console.log(`Too many rapid restarts (${this.restartCount}), adding delay`);
+                            setTimeout(() => {
+                                if (this.speechRecognitionStarted) {
+                                    console.log('Restarting after delay period');
+                                    this.recognizer.start();
+                                    this.lastRestartTime = Date.now();
+                                }
+                            }, this.restartDelay);
+                            return;
+                        }
+                    } else {
+                        // Reset counter if it's been a while since last restart
+                        this.restartCount = 0;
+                    }
+                    
+                    console.log('Speech recognition ended, restarting...');
+                    this.lastRestartTime = now;
+                    
+                    // Use a small delay to avoid continuous restart sounds
+                    setTimeout(() => {
+                        if (this.speechRecognitionStarted) {
+                            try {
+                                this.recognizer.start();
+                            } catch (e) {
+                                console.error('Error restarting speech recognition:', e);
+                            }
+                        }
+                    }, 500);
                 }
             };
 
             this.recognizer.start();
-            this.audioStarted = true;
+            this.speechRecognitionStarted = true;
             console.log('Speech recognition started');
             
         } catch (err) {
@@ -112,9 +172,9 @@ class AudioManager {
         }
     }
 
-    stopAudio() {
+    stopSpeechRecognition() {
         if (this.recognizer) {
-            this.audioStarted = false;
+            this.speechRecognitionStarted = false;
             this.recognizer.stop();
             this.recognizer = null;
         }
@@ -123,6 +183,7 @@ class AudioManager {
             this.transcriptionTimer = null;
         }
         this.finalTranscripts = "";
+        this.restartCount = 0;
         // Clear log when stopping
         if (this.logDiv) {
             this.logDiv.innerHTML = '';
@@ -132,4 +193,4 @@ class AudioManager {
     }
 }
 
-window.AudioManager = AudioManager;
+window.SpeechRecognitionManager = SpeechRecognitionManager;

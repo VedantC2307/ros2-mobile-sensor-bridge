@@ -1,6 +1,10 @@
 camera:
-  facingMode: "user" # Change to "user" for the front camera
+  quality: 0.7 # Quality of the image (0.0 - 1.0)
+  fps: 20 # Max FPS 30
 
 audio:
-  mode: "wav" # Options: "wav", "mp3" or "tts"
+  mode: "tts" # Options: "wav", "mp3" or "tts"
   enabled: true
+
+# Controls debug message logging
+debug_logging: true # Set to true to enable debug logs

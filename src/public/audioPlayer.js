@@ -21,6 +21,16 @@
   // Session state tracking
   let isSessionActive = false;
   
+  // Debug flag - set to false to disable verbose logging
+  const DEBUG_MODE = true;
+
+  // Helper function for debug logging
+  function debugLog(...args) {
+    if (DEBUG_MODE) {
+      console.log('[AudioPlayer]', ...args);
+    }
+  }
+
   // Create and inject the audio element into the DOM
   function createAudioElement() {
     if (!audioElement) {
@@ -30,43 +40,34 @@
       audioElement.controls = false;
       audioElement.autoplay = true;
       
-      // Add event listeners for better status reporting
+      // Add event listeners for audio events
       audioElement.onplay = () => {
-        console.log('Audio playback started');
         isPlaying = true;
-        updateWavStatus('Playing', 'HTML5 Audio');
       };
       
       audioElement.onended = () => {
-        console.log('Audio playback completed');
         isPlaying = false;
-        updateWavStatus('Ready', 'Waiting for next audio');
         
         // Play next item in queue if available
         if (audioQueue.length > 0) {
-          console.log(`Playing next audio from queue (${audioQueue.length} remaining)`);
           const nextAudio = audioQueue.shift();
           playAudioData(nextAudio);
-          updateWavStatus('Playing', `Queued audio (${audioQueue.length} remaining)`);
         }
       };
       
       audioElement.onerror = (e) => {
         console.error('Audio playback error:', audioElement.error);
         isPlaying = false;
-        updateWavStatus('Error', `Code: ${audioElement.error ? audioElement.error.code : 'unknown'}`);
         
         // Try to play next item in queue even if there was an error
         if (audioQueue.length > 0) {
-          console.log(`Attempting next audio after error (${audioQueue.length} remaining)`);
           const nextAudio = audioQueue.shift();
-          setTimeout(() => playAudioData(nextAudio), 500); // Small delay before trying next audio
+          setTimeout(() => playAudioData(nextAudio), 500);
         }
       };
       
       // Append to document body
       document.body.appendChild(audioElement);
-      console.log('Created persistent audio element');
       
       // Try to unlock audio on iOS/Safari with first user interaction
       document.addEventListener('click', () => {
@@ -74,7 +75,7 @@
           // Try playing silence to unlock audio
           const silenceDataURL = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
           audioElement.src = silenceDataURL;
-          audioElement.play().catch(e => console.warn('Silent audio play failed:', e));
+          audioElement.play().catch(e => {});
         }
       }, { once: true });
     }
@@ -88,76 +89,47 @@
       const response = await fetch('/api/config');
       const config = await response.json();
       audioConfig = config.audio || audioConfig;
-      console.log('Audio configuration loaded:', audioConfig);
+      debugLog('Audio configuration loaded:', audioConfig);
       
       // Only connect if audio is enabled and mode is set to wav
       if (audioConfig.enabled && audioConfig.mode === 'wav') {
-        // Create the audio element
         createAudioElement();
         connectWebSocket();
         return true;
-      } else {
-        console.log('WAV audio player disabled by configuration');
-        return false;
       }
+      return false;
     } catch (error) {
       console.error('Error loading configuration:', error);
       return false;
     }
   }
   
-  // Helper function to update the UI connection status if available
+  // Helper function to update the UI connection status
   function updateUIStatus(status) {
     if (window.updateConnectionStatus) {
       window.updateConnectionStatus('tts', status);
     }
   }
   
-  // Helper function to update the WAV audio status text
-  function updateWavStatus(status, details = '') {
-    const statusElement = document.getElementById('wav-status-text');
-    if (statusElement) {
-      let message = status;
-      if (details) {
-        message += ` (${details})`;
-      }
-      statusElement.textContent = message;
-      
-      // Set color based on status
-      if (status.includes('Error') || status.includes('Failed')) {
-        statusElement.style.color = '#ff4d4d'; // Red for errors
-      } else if (status.includes('Connected') || status.includes('Playing')) {
-        statusElement.style.color = '#4CAF50'; // Green for success
-      } else if (status.includes('Connecting') || status.includes('Waiting')) {
-        statusElement.style.color = '#ff9800'; // Orange for in-progress
-      } else {
-        statusElement.style.color = '#999'; // Default gray
-      }
-    }
-  }
-  
   // Connect to WebSocket for WAV audio
   function connectWebSocket() {
     if (audioConfig.mode !== 'wav' || !audioConfig.enabled) {
-      console.log('WAV audio player not connecting - disabled by configuration');
-      updateWavStatus('Disabled by configuration');
       return;
     }
     
     if (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN)) {
-      console.log('WebSocket connection already exists');
       return;
     }
     
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const baseUrl = `${protocol}//${window.location.host}`;
+    const wsUrl = `${baseUrl}/wav_audio`;
     
     // Update UI status to connecting
     updateUIStatus('connecting');
-    updateWavStatus('Connecting...');
     
-    console.log('Connecting to WAV audio WebSocket at:', `${baseUrl}/wav_audio`);
-    ws = new WebSocket(`${baseUrl}/wav_audio`);
+    debugLog('Connecting to WAV audio WebSocket');
+    ws = new WebSocket(wsUrl);
     ws.binaryType = 'arraybuffer'; // Important for binary data
     
     ws.onmessage = function(event) {
@@ -165,34 +137,24 @@
       if (typeof event.data === 'string') {
         try {
           const jsonData = JSON.parse(event.data);
-          console.log('Received JSON message:', jsonData);
           // Check if this is a session state message
           if (jsonData.sessionState !== undefined) {
             isSessionActive = jsonData.sessionState === 'active';
-            console.log(`Session state updated to: ${isSessionActive ? 'active' : 'inactive'}`);
-            updateWavStatus(isSessionActive ? 'Ready' : 'Waiting', 
-                           isSessionActive ? 'Waiting for audio' : 'Session not started');
-            return;
           }
-          updateWavStatus('Ready', 'Waiting for audio');
         } catch (e) {
-          console.log('Received string message:', event.data);
-          updateWavStatus('Received message', event.data.substring(0, 20));
+          // Non-JSON text message, just log
+          debugLog('Received text message:', event.data.substring(0, 20));
         }
         return;
       }
       
       // Handle binary audio data
-      console.log('Received audio data', event.data.byteLength, 'bytes');
+      debugLog('Received audio binary data', event.data.byteLength, 'bytes');
       
       // Only process audio data if session is active
       if (!isSessionActive) {
-        console.log('Audio received but session not active, ignoring');
-        updateWavStatus('Waiting', 'Session not active');
         return;
       }
-      
-      updateWavStatus('Processing audio', `${event.data.byteLength} bytes`);
       
       // Ensure the audio element exists
       createAudioElement();
@@ -202,27 +164,28 @@
     };
     
     ws.onopen = () => {
-      console.log('Connected to WAV audio stream server');
+      debugLog('Connected to WAV audio stream server');
       updateUIStatus('connected');
-      updateWavStatus('Connected', 'Waiting for audio');
+      
+      // Send a message to indicate we're ready to receive audio
+      try {
+        ws.send(JSON.stringify({ ready: true, client: 'audioPlayer.js' }));
+      } catch (err) {
+        console.error('Error sending ready message:', err);
+      }
     };
     
     ws.onclose = () => {
-      console.log('Audio stream connection closed');
       updateUIStatus('disconnected');
-      updateWavStatus('Disconnected');
       
       // Attempt to reconnect after a delay
       if (autoReconnect) {
-        console.log('Attempting to reconnect...');
         setTimeout(connectWebSocket, 3000);
       }
     };
     
-    ws.onerror = (error) => {
-      console.error('WebSocket error:', error);
+    ws.onerror = () => {
       updateUIStatus('disconnected');
-      updateWavStatus('Error', 'Connection failed');
     };
   }
   
@@ -243,18 +206,15 @@
                      headerView[10] === 86 && headerView[11] === 69;
       
       if (!(isRiff && isWave)) {
-        console.log("Adding WAV header to audio data");
         processedData = addWavHeader(audioData);
-      } else {
-        console.log("Using existing WAV header from audio data");
       }
+    } else {
+      processedData = addWavHeader(audioData);
     }
     
     // If audio is currently playing, add to queue
     if (isPlaying) {
       audioQueue.push(processedData);
-      console.log(`Audio added to queue. Queue length: ${audioQueue.length}`);
-      updateWavStatus('Queued', `${audioQueue.length} items waiting`);
       return;
     }
     
@@ -283,15 +243,11 @@
     
     // Attempt to play with error handling
     audioElement.play()
-      .then(() => {
-        console.log('Audio playback started successfully');
-      })
       .catch(err => {
         console.error('Error starting audio playback:', err);
         isPlaying = false;
         
         if (err.name === 'NotAllowedError') {
-          updateWavStatus('Blocked', 'Tap screen once to enable audio');
           showAudioUnblockNotification();
         }
         
@@ -380,7 +336,7 @@
     
     notification.addEventListener('click', function() {
       if (audioElement) {
-        audioElement.play().catch(e => console.warn('Audio play failed after click:', e));
+        audioElement.play().catch(e => {});
       }
       this.remove();
     });
@@ -405,7 +361,6 @@
   
   // Initialize on page load
   window.addEventListener('DOMContentLoaded', () => {
-    console.log('WAV audio player initializing');
     createAudioElement();
     fetchConfig();
     
@@ -429,24 +384,11 @@
             if (audioElement) {
               const silenceDataURL = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
               audioElement.src = silenceDataURL;
-              audioElement.play().catch(e => console.warn('Silent audio play failed:', e));
+              audioElement.play().catch(e => {});
             }
           } else {
             disconnectWebSocket();
           }
-        }
-      });
-    }
-    
-    // Connect the audio unlock button if it exists
-    const unlockBtn = document.getElementById('audio-unlock-button');
-    if (unlockBtn) {
-      unlockBtn.addEventListener('click', () => {
-        console.log('Audio unlock button clicked');
-        if (audioElement) {
-          const silenceDataURL = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
-          audioElement.src = silenceDataURL;
-          audioElement.play().catch(e => console.warn('Silent audio play failed after button click:', e));
         }
       });
     }
@@ -469,27 +411,19 @@
       if (audioElement) {
         const silenceDataURL = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
         return audioElement.play().catch(e => {
-          console.warn('Manual audio unlock failed:', e);
           return false;
         });
       }
       return Promise.reject(new Error('No audio element available'));
     },
     hasAudioElement: () => !!audioElement,
-    
-    // Add new methods for the queue
     clearQueue: () => {
       audioQueue = [];
-      console.log('Audio queue cleared');
       return true;
     },
     getQueueLength: () => audioQueue.length,
-    
-    // Add session state control
     setSessionActive: (active) => {
-      const wasActive = isSessionActive;
       isSessionActive = active;
-      console.log(`Session state changed from ${wasActive ? 'active' : 'inactive'} to ${active ? 'active' : 'inactive'}`);
       
       if (!active) {
         // Clear the queue when session becomes inactive
@@ -499,9 +433,6 @@
           audioElement.pause();
           isPlaying = false;
         }
-        updateWavStatus('Waiting', 'Session not active');
-      } else {
-        updateWavStatus('Ready', 'Waiting for audio');
       }
       return true;
     }

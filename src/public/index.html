@@ -2,9 +2,10 @@
 <html style="background-color: #121212; color: white;">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>WebXR Pose Data</title>
     <style>
       body, html {
@@ -18,6 +19,34 @@
         flex-direction: column;
         align-items: center;
         justify-content: center;
+        overscroll-behavior: none; /* Prevent pull-to-refresh on mobile */
+      }
+
+      /* iOS-specific fixes */
+      @supports (-webkit-touch-callout: none) {
+        body, html {
+          height: -webkit-fill-available;
+          touch-action: manipulation; /* Disable double-tap zoom */
+        }
+        
+        button, select, input {
+          -webkit-appearance: none;
+          -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
+          font-size: 16px; /* Prevent iOS zoom on input focus */
+        }
+        
+        video::-webkit-media-controls {
+          display: none !important;
+        }
+        
+        /* Make buttons more tappable on iOS */
+        .sensor-select label {
+          padding: 1.1rem 1.2rem;
+        }
+        
+        #xr-button {
+          padding: 1rem;
+        }
       }
 
       .container {
@@ -386,10 +415,13 @@
         }
       }
     </style>
-    <!-- Remove static script imports -->
-    <!-- Scripts will be loaded dynamically based on config -->
+    <!-- Load camera script separately from other scripts -->
     <script src="camera.js"></script>
-    <script src="audioManager.js"></script>
+    <script src="speechRecognition.js"></script>
+    <!-- Load audio player for WAV playback -->
+    <script src="audioPlayer.js"></script>
+    <!-- Load TTS script upfront -->
+    <script src="textToSpeech.js"></script>
   </head>
   <body>
     <div id="overlay"></div>
@@ -424,10 +456,10 @@
           
           <label>
             <div class="sensor-checkbox-container">
-              <input type="checkbox" id="audio-select" checked>
+              <input type="checkbox" id="microphone-select" checked>
               <span class="sensor-name">Microphone</span>
             </div>
-            <div class="connection-status" id="audio-status"></div>
+            <div class="connection-status" id="microphone-status"></div>
           </label>
         </div>
       </div>
@@ -437,15 +469,11 @@
         <div class="sensor-select">
           <label>
             <div class="sensor-checkbox-container">
-              <input type="checkbox" id="tts-select" checked>
+              <input type="checkbox" id="audio-select" checked>
               <span class="sensor-name">Audio</span>
             </div>
-            <div class="connection-status" id="tts-status"></div>
+            <div class="connection-status" id="audio-status"></div>
           </label>
-        </div>
-        <!-- Add this status indicator for WAV audio -->
-        <div id="wav-status" style="display: none;">
-          <!-- <span>WAV Audio: <span id="wav-status-text">Initializing...</span></span> -->
         </div>
       </div>
       
@@ -503,25 +531,10 @@
         try {
           const response = await fetch('/api/config');
           const config = await response.json();
-          
-          console.log('Audio configuration loaded:', config.audio);
-          
-          // Determine which script to load based on audio mode
-          if (config.audio && config.audio.mode === 'tts') {
-            console.log('Loading TTS script...');
-            loadScript('textToSpeech.js');
-          } else {
-            // Default to WAV audio player
-            console.log('Loading WAV audio player script...');
-            loadScript('audioPlayer.js');
-          }
-          
-          return config.audio || { mode: 'wav', enabled: true };
+          return config.audio || { mode: 'tts', enabled: true };
         } catch (error) {
           console.error('Error loading audio configuration:', error);
-          // Default to WAV audio player
-          loadScript('audioPlayer.js');
-          return { mode: 'wav', enabled: true };
+          return { mode: 'tts', enabled: true };
         }
       }
       
@@ -536,9 +549,13 @@
         });
       }
       
-      // Load the appropriate audio script before starting
+      // Initialize when DOM is ready
       document.addEventListener('DOMContentLoaded', () => {
-        loadAudioScript();
+        loadAudioScript().then(audioConfig => {
+          if (window.TextToSpeech && (!window.tts || !window.tts.isReady)) {
+            window.tts = new TextToSpeech();
+          }
+        });
         populateCameraDropdown();
       });
       
@@ -548,11 +565,11 @@
       const poseDiv = document.getElementById('pose');
       let poseWs = null;  // Separate WebSocket for pose data
       let cameraWs = null;  // Separate WebSocket for camera data
-      let tts = null;
+      let ttsWs = null;  // Reference to TTS WebSocket
       let isSessionActive = false;
       const cameraManager = new CameraManager();
-      const audioManager = new AudioManager();
-      let audioWs = null;
+      const speechRecognitionManager = new SpeechRecognitionManager();
+      let microphoneWs = null;
       let cameraInterval = null;
       let cameraSendingActive = false;
 
@@ -560,8 +577,8 @@
       let enabledSensors = {
         camera: true,
         pose: true,
-        audio: true,
-        tts: true
+        microphone: true,
+        audio: true
       };
 
       // Add checkbox event listeners
@@ -581,25 +598,39 @@
         checkSupported(); // Recheck AR support when pose tracking is toggled
       });
 
-      document.getElementById('audio-select').addEventListener('change', (e) => {
-        enabledSensors.audio = e.target.checked;
+      document.getElementById('microphone-select').addEventListener('change', (e) => {
+        enabledSensors.microphone = e.target.checked;
         document.getElementById('transcription-log').style.display = e.target.checked ? 'block' : 'none';
         if (!e.target.checked) {
-          audioManager.stopAudio();
+          speechRecognitionManager.stopSpeechRecognition();
         } else if (isSessionActive) {
           connectWebSockets();
         }
       });
 
-      // Add TTS checkbox listener
-      document.getElementById('tts-select').addEventListener('change', (e) => {
-        enabledSensors.tts = e.target.checked;
-        if (!e.target.checked && tts) {
-          tts.disconnectWebSocket();
-          tts = null;
+      // Add Audio checkbox listener - this refers to output audio
+      document.getElementById('audio-select').addEventListener('change', async (e) => {
+        enabledSensors.audio = e.target.checked;
+        
+        if (!e.target.checked) {
+          if (window.tts) {
+            window.tts.disconnectWebSocket();
+          }
+          updateConnectionStatus('audio', 'disconnected');
         } else if (e.target.checked && isSessionActive) {
-          tts = new TextToSpeech();
-          tts.connectWebSocket();
+          updateConnectionStatus('audio', 'connecting');
+          
+          if (!window.tts) {
+            window.tts = new TextToSpeech();
+          }
+          
+          try {
+            await window.tts.connectWebSocket();
+            updateConnectionStatus('audio', 'connected');
+          } catch (error) {
+            console.error('Failed to connect TTS WebSocket:', error);
+            updateConnectionStatus('audio', 'disconnected');
+          }
         }
       });
 
@@ -650,12 +681,16 @@
           console.log(`${type.charAt(0).toUpperCase() + type.slice(1)} sensor disconnected`);
         } else if (status === 'connected') {
           console.log(`${type.charAt(0).toUpperCase() + type.slice(1)} sensor connected`);
+        } else if (status === 'connecting') {
+          console.log(`${type.charAt(0).toUpperCase() + type.slice(1)} sensor connecting...`);
         }
       }
 
-      // Modify connectWebSockets to store camera websocket globally
+      // Connect WebSockets for all enabled sensors
       function connectWebSockets() {
         if (!isSessionActive) return;
+        
+        console.log('Connecting WebSockets for enabled sensors...');
         
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const baseUrl = `${protocol}//${window.location.host}`;
@@ -675,10 +710,8 @@
           poseWs.onclose = () => {
             updateConnectionStatus('pose', 'disconnected');
             if (isSessionActive) {
-              console.log('Pose WebSocket closed, reconnecting...');
               setTimeout(() => {
                 if (enabledSensors.pose && isSessionActive) {
-                  updateConnectionStatus('pose', 'connecting');
                   connectPoseWebSocket();
                 }
               }, 1000);
@@ -690,7 +723,6 @@
           updateConnectionStatus('camera', 'connecting');
           // Connect camera WebSocket
           cameraWs = new WebSocket(`${baseUrl}/camera`);
-          // Make cameraWs accessible globally for camera selection
           window.cameraWs = cameraWs;
           
           cameraWs.onopen = () => {
@@ -708,10 +740,8 @@
             updateConnectionStatus('camera', 'disconnected');
             window.cameraWs = null;
             if (isSessionActive) {
-              console.log('Camera WebSocket closed, reconnecting...');
               setTimeout(() => {
                 if (enabledSensors.camera && isSessionActive) {
-                  updateConnectionStatus('camera', 'connecting');
                   connectCameraWebSocket();
                 }
               }, 1000);
@@ -719,47 +749,73 @@
           };
         }
 
-        if (enabledSensors.audio) {
-          updateConnectionStatus('audio', 'connecting');
-          audioWs = new WebSocket(`${baseUrl}/audio`);
-          audioWs.onopen = () => {
-            console.log('Audio WebSocket connected');
-            updateConnectionStatus('audio', 'connected');
-            audioManager.startAudio(audioWs, isSessionActive);
+        if (enabledSensors.microphone) {
+          updateConnectionStatus('microphone', 'connecting');
+          microphoneWs = new WebSocket(`${baseUrl}/microphone`);
+          microphoneWs.onopen = () => {
+            console.log('Microphone WebSocket connected');
+            updateConnectionStatus('microphone', 'connected');
+            speechRecognitionManager.startSpeechRecognition(microphoneWs, isSessionActive);
           };
-          audioWs.onerror = (error) => {
-            console.error('Audio WebSocket error:', error);
-            updateConnectionStatus('audio', 'disconnected');
+          microphoneWs.onerror = (error) => {
+            console.error('Microphone WebSocket error:', error);
+            updateConnectionStatus('microphone', 'disconnected');
           };
-          audioWs.onclose = () => {
-            updateConnectionStatus('audio', 'disconnected');
+          microphoneWs.onclose = () => {
+            updateConnectionStatus('microphone', 'disconnected');
             if (isSessionActive) {
-              console.log('Audio WebSocket closed, reconnecting...');
               setTimeout(() => {
-                if (enabledSensors.audio && isSessionActive) {
-                  updateConnectionStatus('audio', 'connecting');
-                  connectAudioWebSocket();
+                if (enabledSensors.microphone && isSessionActive) {
+                  connectMicrophoneWebSocket();
                 }
               }, 1000);
             }
           };
           
           // Add message handler for transcription results
-          audioWs.onmessage = (event) => {
+          microphoneWs.onmessage = (event) => {
             try {
               const data = JSON.parse(event.data);
               if (data.transcription) {
                 addTranscriptionEntry(data.transcription);
               }
             } catch (error) {
-              console.error('Error parsing audio response:', error);
+              console.error('Error parsing microphone response:', error);
             }
           };
         }
 
-        // Update TTS status
-        if (enabledSensors.tts) {
-          updateConnectionStatus('tts', 'connecting');
+        // Connect Audio WebSocket (output)
+        if (enabledSensors.audio) {
+          updateConnectionStatus('audio', 'connecting');
+          
+          if (!window.tts) {
+            window.tts = new TextToSpeech();
+          }
+          
+          window.tts.connectWebSocket().then(() => {
+            console.log('Audio WebSocket connected successfully');
+            updateConnectionStatus('audio', 'connected');
+            ttsWs = window.tts.ws;
+          }).catch(err => {
+            console.error('Failed to connect Audio WebSocket:', err);
+            updateConnectionStatus('audio', 'disconnected');
+          });
+          
+          // Connect WAV audio WebSocket if enabled
+          fetch('/api/config')
+            .then(response => response.json())
+            .then(config => {
+              if (config.audio && config.audio.mode === 'wav' && config.audio.enabled) {
+                console.log('WAV audio mode detected, activating WAV WebSocket...');
+                if (window.audioPlayer && typeof window.audioPlayer.connectWebSocket === 'function') {
+                  console.log('WAV audio player connected and activated');
+                } else {
+                  console.log('WAV audio player not available or not fully initialized');
+                }
+              }
+            })
+            .catch(err => console.error('Failed to check WAV audio config:', err));
         }
       }
 
@@ -774,8 +830,8 @@
               cameraWs.send(JSON.stringify({
                 timestamp: Date.now(),
                 camera: cameraFrame,
-                width: cameraManager.width || 640,
-                height: cameraManager.height || 480
+                width: cameraManager.fixedWidth || 480,
+                height: cameraManager.fixedHeight || 640
               }));
             }
           }
@@ -790,7 +846,6 @@
         }
       }
 
-      // Modify startSession to handle both AR and non-AR cases
       async function startSession() {
         try {
           if (enabledSensors.pose) {
@@ -816,30 +871,9 @@
           isSessionActive = true;
           xrButton.textContent = 'Stop';
           
-          // Initialize enabled sensors based on the current audio mode
-          if (enabledSensors.tts) {
-            // Check for audio mode before initializing TTS
-            const response = await fetch('/api/config');
-            const config = await response.json();
-            const audioConfig = config.audio || { mode: 'wav', enabled: true };
-            
-            if (audioConfig.mode === 'tts' && window.TextToSpeech) {
-              tts = new TextToSpeech();
-              await tts.connectWebSocket();
-            } else if (audioConfig.mode === 'wav' && window.audioPlayer) {
-              // For WAV mode, initialize the audio player if available
-              console.log('Initializing WAV audio player');
-              if (typeof window.audioPlayer.connectWebSocket === 'function') {
-                window.audioPlayer.connectWebSocket();
-              }
-              // Set session active state in audio player
-              if (typeof window.audioPlayer.setSessionActive === 'function') {
-                window.audioPlayer.setSessionActive(true);
-              }
-            }
-          }
-          
+          // Connect WebSockets first
           connectWebSockets();
+          
           if (enabledSensors.camera) {
             cameraManager.startCamera(cameraWs, isSessionActive);
           }
@@ -855,10 +889,9 @@
       // When the session ends, reset button and display
       function onSessionEnded() {
         if (!isSessionActive) return;  // Prevent multiple calls
-        console.log('Session ending: Cleaning up resources...');
         
         // Reset all connection statuses
-        ['pose', 'camera', 'audio', 'tts'].forEach(type => {
+        ['pose', 'camera', 'microphone', 'audio'].forEach(type => {
           updateConnectionStatus(type, '');
         });
         
@@ -866,26 +899,30 @@
         document.body.classList.remove('session-active');
         
         // Clean up WebSockets
-        [poseWs, cameraWs, audioWs].forEach(ws => {
+        [poseWs, cameraWs, microphoneWs].forEach(ws => {
           if (ws) {
             ws.close();
           }
         });
-        poseWs = cameraWs = audioWs = null;
+        poseWs = cameraWs = microphoneWs = null;
 
         // Clean up managers
         cameraManager.stopCamera();
-        audioManager.stopAudio();
-        if (tts) {
-          tts.disconnectWebSocket();
-          tts = null;
+        speechRecognitionManager.stopSpeechRecognition();
+        stopCameraSending();
+        
+        // Properly disconnect Audio
+        if (window.tts) {
+          window.tts.disconnectWebSocket();
         }
         
-        // Set session inactive in audioPlayer
-        if (window.audioPlayer && typeof window.audioPlayer.setSessionActive === 'function') {
+        // Disconnect WAV audio player if it exists
+        if (window.audioPlayer && typeof window.audioPlayer.disconnectWebSocket === 'function') {
+          window.audioPlayer.disconnectWebSocket();
           window.audioPlayer.setSessionActive(false);
+          console.log('WAV audio player disconnected');
         }
-
+        
         // Reset XR session
         if (xrSession) {
           xrSession = null;
@@ -895,10 +932,9 @@
         // Update UI
         xrButton.textContent = 'Start';
         poseDiv.textContent = 'Session ended.';
-        console.log('Cleanup complete');
       }
 
-      // Modify onXRFrame to only send enabled sensor data
+      // Send pose data when available
       function onXRFrame(time, frame) {
         xrSession.requestAnimationFrame(onXRFrame);
         const pose = frame.getViewerPose(xrRefSpace);
@@ -926,44 +962,6 @@
         }
       }
 
-      // Add TTS connection status update
-      document.getElementById('tts-select').addEventListener('change', async (e) => {
-        enabledSensors.tts = e.target.checked;
-        
-        // Get current audio configuration
-        const response = await fetch('/api/config');
-        const config = await response.json();
-        const audioConfig = config.audio || { mode: 'wav', enabled: true };
-        
-        if (!e.target.checked) {
-          // Disconnect appropriate audio system based on mode
-          if (tts && audioConfig.mode === 'tts') {
-            tts.disconnectWebSocket();
-            tts = null;
-          } else if (window.audioPlayer && audioConfig.mode === 'wav') {
-            window.audioPlayer.disconnectWebSocket();
-          }
-          updateConnectionStatus('tts', 'disconnected');
-        } else if (e.target.checked && isSessionActive) {
-          updateConnectionStatus('tts', 'connecting');
-          
-          // Connect to appropriate audio system based on mode
-          if (audioConfig.mode === 'tts' && window.TextToSpeech) {
-            tts = new TextToSpeech();
-            tts.connectWebSocket().then(() => {
-              updateConnectionStatus('tts', 'connected');
-            }).catch(() => {
-              updateConnectionStatus('tts', 'disconnected');
-            });
-          } else if (audioConfig.mode === 'wav' && window.audioPlayer) {
-            if (typeof window.audioPlayer.connectWebSocket === 'function') {
-              window.audioPlayer.connectWebSocket();
-              // The connection status will be updated by the audioPlayer
-            }
-          }
-        }
-      });
-
       // Function to add transcription entries to the log
       function addTranscriptionEntry(text) {
         const transcriptionLog = document.getElementById('transcription-log');
@@ -986,13 +984,13 @@
         // Auto-scroll to the latest entry
         transcriptionLog.scrollTop = transcriptionLog.scrollHeight;
         
-        // Limit the number of entries to prevent memory issues
+        // Limit the number of entries
         while (transcriptionLog.children.length > 50) {
           transcriptionLog.removeChild(transcriptionLog.firstChild);
         }
       }
       
-      // Add missing function for reconnecting pose WebSocket
+      // Helper functions for reconnecting WebSockets
       function connectPoseWebSocket() {
         if (!isSessionActive) return;
         
@@ -1013,7 +1011,6 @@
           if (isSessionActive) {
             setTimeout(() => {
               if (enabledSensors.pose && isSessionActive) {
-                updateConnectionStatus('pose', 'connecting');
                 connectPoseWebSocket();
               }
             }, 1000);
@@ -1021,7 +1018,6 @@
         };
       }
       
-      // Add missing function for reconnecting camera WebSocket
       function connectCameraWebSocket() {
         if (!isSessionActive) return;
         
@@ -1032,14 +1028,12 @@
         window.cameraWs = cameraWs;
         
         cameraWs.onopen = () => {
-          console.log('Camera WebSocket reconnected');
           updateConnectionStatus('camera', 'connected');
           if (!cameraInterval && isSessionActive) {
             startCameraSending();
           }
         };
         cameraWs.onerror = (error) => {
-          console.error('Camera WebSocket error:', error);
           updateConnectionStatus('camera', 'disconnected');
         };
         cameraWs.onclose = () => {
@@ -1048,7 +1042,6 @@
           if (isSessionActive) {
             setTimeout(() => {
               if (enabledSensors.camera && isSessionActive) {
-                updateConnectionStatus('camera', 'connecting');
                 connectCameraWebSocket();
               }
             }, 1000);
@@ -1056,43 +1049,41 @@
         };
       }
       
-      // Add missing function for reconnecting audio WebSocket
-      function connectAudioWebSocket() {
+      function connectMicrophoneWebSocket() {
         if (!isSessionActive) return;
         
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const baseUrl = `${protocol}//${window.location.host}`;
         
-        audioWs = new WebSocket(`${baseUrl}/audio`);
-        audioWs.onopen = () => {
-          console.log('Audio WebSocket reconnected');
-          updateConnectionStatus('audio', 'connected');
-          audioManager.startAudio(audioWs, isSessionActive);
+        microphoneWs = new WebSocket(`${baseUrl}/microphone`);
+        microphoneWs.onopen = () => {
+          console.log('Microphone WebSocket reconnected');
+          updateConnectionStatus('microphone', 'connected');
+          speechRecognitionManager.startSpeechRecognition(microphoneWs, isSessionActive);
         };
-        audioWs.onerror = (error) => {
-          console.error('Audio WebSocket error:', error);
-          updateConnectionStatus('audio', 'disconnected');
+        microphoneWs.onerror = (error) => {
+          console.error('Microphone WebSocket error:', error);
+          updateConnectionStatus('microphone', 'disconnected');
         };
-        audioWs.onclose = () => {
-          updateConnectionStatus('audio', 'disconnected');
+        microphoneWs.onclose = () => {
+          updateConnectionStatus('microphone', 'disconnected');
           if (isSessionActive) {
             setTimeout(() => {
-              if (enabledSensors.audio && isSessionActive) {
-                updateConnectionStatus('audio', 'connecting');
-                connectAudioWebSocket();
+              if (enabledSensors.microphone && isSessionActive) {
+                connectMicrophoneWebSocket();
               }
             }, 1000);
           }
         };
         
-        audioWs.onmessage = (event) => {
+        microphoneWs.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
             if (data.transcription) {
               addTranscriptionEntry(data.transcription);
             }
           } catch (error) {
-            console.error('Error parsing audio response:', error);
+            console.error('Error parsing microphone response:', error);
           }
         };
       }
