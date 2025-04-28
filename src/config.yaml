@@ -6,5 +6,8 @@ audio:
   mode: "tts" # Options: "wav", "mp3" or "tts"
   enabled: true
 
+microphone:
+  wake_word: "robot"
+
 # Controls debug message logging
 debug_logging: true # Set to true to enable debug logs
