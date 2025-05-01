@@ -156,9 +156,18 @@
         
         // Check config to see if debug console should be enabled
         fetch('/api/config')
-          .then(response => response.json())
+          .then(response => {
+            if (!response.ok) {
+              throw new Error(`Config fetch failed with status: ${response.status}`);
+            }
+            return response.json();
+          })
           .then(config => {
-            const debugEnabled = config['mobile-debug-console'] === true;
+            // Check both formats of the property name for compatibility
+            const debugEnabled = config['mobile-debug-console'] === true || 
+                                (config.debug && config.debug['mobile-debug-console'] === true);
+            
+            console.log('Debug config loaded:', debugEnabled);
             
             // Hide both console and toggle button if disabled in config
             if (!debugEnabled) {

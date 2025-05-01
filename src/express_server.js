@@ -31,7 +31,7 @@ function createExpressApp(config) {
       microphone: config.microphone || {},
       debug: {
         // Handle nested debug properties
-        mobile_debug_console: config.debug && config.debug['mobile-debug-console'] || false
+        'mobile-debug-console': config.debug && config.debug['mobile-debug-console'] || false
       }
     };
     

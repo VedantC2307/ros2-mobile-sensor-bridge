@@ -17,6 +17,6 @@ microphone:
 # Controls debug message logging
 debug:
   color_logging: true # Set to true to enable color logging
-  debug_logging: false # Set to true to enable debug logs
-  mobile-debug-console: false # Set to true to enable the mobile debug console
+  debug_logging: true # Set to true to enable debug logs
+  mobile-debug-console: true # Set to true to enable the mobile debug console
   
