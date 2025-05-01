@@ -19,6 +19,9 @@ let enabledSensors = {
   audio: true
 };
 
+// Shared audio context for iOS to ensure microphone and audio playback work together
+let sharedAudioContext = null;
+
 // Initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
   // Initialize UI and add event listeners
@@ -33,6 +36,33 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Populate camera dropdown
   populateCameraDropdown();
+
+  // Initialize debug console based on config
+  initializeDebugConsole();
+
+  // iOS Audio Unlock - Run on first user tap/click (before ANY playback)
+  async function iosUnlock() {
+    if (!sharedAudioContext) {
+      sharedAudioContext = new (window.AudioContext||window.webkitAudioContext)();
+      await sharedAudioContext.resume();              // step 1
+      // step 2: play 1-frame silent buffer
+      const buf = sharedAudioContext.createBuffer(1, 1, sharedAudioContext.sampleRate);
+      const src = sharedAudioContext.createBufferSource();
+      src.buffer = buf;
+      src.connect(sharedAudioContext.destination);
+      src.start(0);
+      
+      // Make it available globally
+      window.sharedAudioContext = sharedAudioContext;
+      console.log('iOS audio unlocked, context state:', sharedAudioContext.state);
+    }
+  }
+  
+  // Add iOS unlock handlers at the document level - will run on first interaction
+  if (/iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream) {
+    document.body.addEventListener('touchstart', iosUnlock, { once: true });
+    document.body.addEventListener('click', iosUnlock, { once: true });
+  }
   
   // Check if XR is supported
   checkSupported();
@@ -81,21 +111,23 @@ function initializeUI() {
       if (window.tts) {
         window.tts.disconnectWebSocket();
       }
+      
+      // Also disconnect WAV audio player if it exists
+      if (window.audioPlayer && typeof window.audioPlayer.disconnectWebSocket === 'function') {
+        window.audioPlayer.disconnectWebSocket();
+      }
+      
       updateConnectionStatus('audio', 'disconnected');
     } else if (e.target.checked && isSessionActive) {
+      // Make sure iOS audio is unlocked regardless of microphone state
+      if (/iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream) {
+        await ensureIOSAudioUnlocked();
+      }
+      
       updateConnectionStatus('audio', 'connecting');
       
-      if (!window.tts) {
-        window.tts = new TextToSpeech();
-      }
-      
-      try {
-        await window.tts.connectWebSocket();
-        updateConnectionStatus('audio', 'connected');
-      } catch (error) {
-        console.error('Failed to connect TTS WebSocket:', error);
-        updateConnectionStatus('audio', 'disconnected');
-      }
+      // Connect both TTS and WAV audio systems
+      connectAudioServices();
     }
   });
   
@@ -112,6 +144,99 @@ function initializeUI() {
       }
     }
   });
+}
+
+// Helper function to ensure iOS audio is unlocked
+async function ensureIOSAudioUnlocked() {
+  if (!sharedAudioContext) {
+    // Create it if it doesn't exist yet
+    sharedAudioContext = new (window.AudioContext||window.webkitAudioContext)();
+    await sharedAudioContext.resume();
+    
+    // Play a silent buffer to fully unlock audio
+    const buf = sharedAudioContext.createBuffer(1, 1, sharedAudioContext.sampleRate);
+    const src = sharedAudioContext.createBufferSource();
+    src.buffer = buf;
+    src.connect(sharedAudioContext.destination);
+    src.start(0);
+    
+    // Make it available globally
+    window.sharedAudioContext = sharedAudioContext;
+    console.log('iOS audio context created and unlocked');
+  } else if (sharedAudioContext.state === 'suspended') {
+    await sharedAudioContext.resume();
+    console.log('Resumed existing audio context');
+  }
+  
+  return sharedAudioContext.state === 'running';
+}
+
+// Connect both TTS and WAV audio WebSockets
+function connectAudioServices() {
+  // First TTS
+  if (!window.tts) {
+    window.tts = new TextToSpeech();
+  }
+  
+  window.tts.connectWebSocket().then(() => {
+    console.log('TTS WebSocket connected successfully');
+    updateConnectionStatus('audio', 'connected');
+    ttsWs = window.tts.ws;
+  }).catch(err => {
+    console.error('Failed to connect TTS WebSocket:', err);
+  });
+  
+  // Then check if WAV audio is enabled in config
+  fetch('/api/config')
+    .then(response => response.json())
+    .then(config => {
+      if (config.audio && config.audio.mode === 'wav' && config.audio.enabled) {
+        console.log('WAV audio mode detected, activating WAV WebSocket...');
+        if (window.audioPlayer && typeof window.audioPlayer.connectWebSocket === 'function') {
+          // Ensure we're sharing the same audio context on iOS
+          if (/iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream) {
+            if (window.sharedAudioContext && window.audioPlayer.audioContext !== window.sharedAudioContext) {
+              window.audioPlayer.audioContext = window.sharedAudioContext;
+              console.log('Shared audio context with WAV player');
+            }
+            
+            // First reinitialize the audio if necessary (for restart cases)
+            if (window.audioPlayer.reinitializeAudio) {
+              window.audioPlayer.reinitializeAudio().then(reinitialized => {
+                console.log('Audio reinitialization result:', reinitialized);
+                
+                // Then unlock and connect
+                window.audioPlayer.unlockAudio().then(success => {
+                  if (success) {
+                    console.log('WAV audio player explicitly unlocked');
+                    window.audioPlayer.setSessionActive(true);
+                    window.audioPlayer.connectWebSocket();
+                  } else {
+                    console.warn('Failed to unlock WAV audio player');
+                  }
+                });
+              });
+            } else {
+              // Fallback to just unlocking
+              window.audioPlayer.unlockAudio().then(success => {
+                if (success) {
+                  console.log('WAV audio player unlocked');
+                  window.audioPlayer.setSessionActive(true);
+                  window.audioPlayer.connectWebSocket();
+                }
+              });
+            }
+          } else {
+            window.audioPlayer.connectWebSocket();
+          }
+          
+          console.log('WAV audio player connected and activated');
+        } else {
+          console.log('WAV audio player not available or not fully initialized');
+        }
+      }
+    })
+    .catch(err => console.error('Failed to check WAV audio config:', err));
 }
 
 // Function to populate camera dropdown
@@ -236,37 +361,21 @@ function connectWebSockets() {
     connectMicrophoneWebSocket(baseUrl);
   }
 
-  // Connect Audio WebSocket (output)
+  // Connect Audio WebSocket (output) - now using the helper function
   if (enabledSensors.audio) {
-    updateConnectionStatus('audio', 'connecting');
-    
-    if (!window.tts) {
-      window.tts = new TextToSpeech();
-    }
-    
-    window.tts.connectWebSocket().then(() => {
-      console.log('Audio WebSocket connected successfully');
-      updateConnectionStatus('audio', 'connected');
-      ttsWs = window.tts.ws;
-    }).catch(err => {
-      console.error('Failed to connect Audio WebSocket:', err);
-      updateConnectionStatus('audio', 'disconnected');
-    });
-    
-    // Connect WAV audio WebSocket if enabled
-    fetch('/api/config')
-      .then(response => response.json())
-      .then(config => {
-        if (config.audio && config.audio.mode === 'wav' && config.audio.enabled) {
-          console.log('WAV audio mode detected, activating WAV WebSocket...');
-          if (window.audioPlayer && typeof window.audioPlayer.connectWebSocket === 'function') {
-            console.log('WAV audio player connected and activated');
-          } else {
-            console.log('WAV audio player not available or not fully initialized');
-          }
+    // Ensure iOS audio is unlocked before connecting audio services
+    if (/iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream) {
+      ensureIOSAudioUnlocked().then(success => {
+        if (success) {
+          connectAudioServices();
+        } else {
+          console.warn('Failed to unlock iOS audio, audio playback may not work');
+          updateConnectionStatus('audio', 'disconnected');
         }
-      })
-      .catch(err => console.error('Failed to check WAV audio config:', err));
+      });
+    } else {
+      connectAudioServices();
+    }
   }
 }
 
@@ -398,6 +507,21 @@ function stopCameraSending() {
 // Function to start the AR/XR session
 async function startSession() {
   try {
+    // First attempt to unlock audio for iOS to ensure it's available when needed
+    // This needs to happen for ALL sessions, regardless of microphone state
+    if (/iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream) {
+      const unlocked = await ensureIOSAudioUnlocked();
+      if (unlocked) {
+        console.log('iOS audio successfully unlocked before starting session');
+        
+        // Add this block to reinitialize the audio player if it exists
+        if (window.audioPlayer && typeof window.audioPlayer.reinitializeAudio === 'function') {
+          const reinitialized = await window.audioPlayer.reinitializeAudio();
+          console.log('Audio player reinitialization result:', reinitialized);
+        }
+      }
+    }
+
     if (enabledSensors.pose) {
       // Start AR session only if position tracking is enabled
       xrSession = await navigator.xr.requestSession('immersive-ar', {
@@ -461,16 +585,33 @@ function onSessionEnded() {
   window.speechRecognitionManager.stopSpeechRecognition();
   stopCameraSending();
   
-  // Properly disconnect Audio
+  // Properly disconnect Audio and stop all playback
   if (window.tts) {
     window.tts.disconnectWebSocket();
+    if (window.tts.stop) {
+      window.tts.stop(); // Stop any TTS audio that might be playing
+    }
   }
   
-  // Disconnect WAV audio player if it exists
-  if (window.audioPlayer && typeof window.audioPlayer.disconnectWebSocket === 'function') {
-    window.audioPlayer.disconnectWebSocket();
-    window.audioPlayer.setSessionActive(false);
-    console.log('WAV audio player disconnected');
+  // Disconnect WAV audio player if it exists and stop all playback
+  if (window.audioPlayer) {
+    if (typeof window.audioPlayer.disconnectWebSocket === 'function') {
+      window.audioPlayer.disconnectWebSocket();
+    }
+    
+    // Instead of creating a new audio context, just stop current playback
+    if (typeof window.audioPlayer.stopAllAudio === 'function') {
+      window.audioPlayer.stopAllAudio();
+      console.log('All audio playback stopped while preserving context');
+    } else {
+      // Fallback if stopAllAudio is not available
+      if (typeof window.audioPlayer.setSessionActive === 'function') {
+        window.audioPlayer.setSessionActive(false);
+      }
+      if (typeof window.audioPlayer.clearQueue === 'function') {
+        window.audioPlayer.clearQueue();
+      }
+    }
   }
   
   // Reset XR session
@@ -538,4 +679,16 @@ function addTranscriptionEntry(text) {
   while (transcriptionLog.children.length > 50) {
     transcriptionLog.removeChild(transcriptionLog.firstChild);
   }
+}
+
+// Function to initialize debug console based on config
+function initializeDebugConsole() {
+  const debugConsole = document.getElementById('debug-console');
+  const debugToggle = document.getElementById('debug-toggle');
+  
+  // Hide by default until config is loaded
+  debugToggle.style.display = 'none';
+  
+  // We don't need to do anything here - the script in index.html
+  // will handle fetching the config and setting up the console
 }

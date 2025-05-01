@@ -4,6 +4,7 @@
  */
 const WebSocket = require('ws');
 const rosInterface = require('./ros_interface');
+const Logger = require('./logger');
 
 // Store WebSocket servers for use across the module
 let servers = {
@@ -74,7 +75,7 @@ function initWebSockets(server) {
 // Set up pose data WebSocket handlers
 function setupPoseHandlers() {
   servers.pose.on('connection', (ws) => {
-    console.log('New pose data WebSocket client connected');
+    Logger.info('APP', 'Pose data sensor activated');
     ws.on('message', async (message) => {
       try {
         const data = JSON.parse(message);
@@ -86,13 +87,13 @@ function setupPoseHandlers() {
           });
         }
       } catch (err) {
-        console.error('Error processing pose message:', err);
+        Logger.error('ROS', `Error processing pose message: ${err}`);
       }
     });
     
     // Add disconnect logging
     ws.on('close', () => {
-      console.log('Pose data WebSocket client disconnected');
+      Logger.info('APP', 'Pose data sensor deactivated');
     });
   });
 }
@@ -100,7 +101,7 @@ function setupPoseHandlers() {
 // Set up camera data WebSocket handlers
 function setupCameraHandlers() {
   servers.camera.on('connection', (ws) => {
-    console.log('New camera data WebSocket client connected');
+    Logger.info('APP', 'Camera sensor activated');
     ws.on('message', async (message) => {
       try {
         const data = JSON.parse(message);
@@ -123,17 +124,17 @@ function setupCameraHandlers() {
             // Use ROS interface to publish camera data
             rosInterface.publishCameraData(imageBuffer, width, height, stamp);
           } catch (error) {
-            console.error('Error publishing camera data to ROS2:', error);
+            Logger.error('ROS', `Error publishing camera data to ROS2: ${error}`);
           }
         }
       } catch (err) {
-        console.error('Error processing camera message:', err);
+        Logger.error('ROS', `Error processing camera message: ${err}`);
       }
     });
     
     // Add disconnect logging
     ws.on('close', () => {
-      console.log('Camera data WebSocket client disconnected');
+      Logger.info('APP', 'Camera sensor deactivated');
     });
   });
 }
@@ -141,24 +142,25 @@ function setupCameraHandlers() {
 // Set up TTS WebSocket handlers
 function setupTTSHandlers() {
   servers.tts.on('connection', (ws) => {
-    console.log('New TTS WebSocket client connected');
+    Logger.info('APP', 'Text-to-speech node activated');
+    
     ttsClients.add(ws);
     
     // Send a welcome message to verify the connection works
     try {
       ws.send("TTS system ready");
-      console.log('Sent welcome message to TTS client');
+      Logger.info('ROS', 'TTS node initialized');
     } catch (error) {
-      console.error('Error sending welcome message to TTS client:', error);
+      Logger.error('ROS', `Error initializing TTS node: ${error}`);
     }
     
     ws.on('close', () => {
-      console.log('TTS WebSocket client disconnected');
+      Logger.info('APP', 'Text-to-speech node deactivated');
       ttsClients.delete(ws);
     });
     
     ws.on('error', (error) => {
-      console.error('TTS WebSocket error:', error);
+      Logger.error('ROS', `TTS node error: ${error}`);
     });
   });
 }
@@ -166,25 +168,26 @@ function setupTTSHandlers() {
 // Set up microphone WebSocket handlers (renamed from setupAudioHandlers)
 function setupMicrophoneHandlers() {
   servers.microphone.on('connection', (ws) => {
-    console.log('New microphone WebSocket client connected');
+    Logger.info('APP', 'Microphone sensor activated');
+    
     ws.on('message', async (message) => {
       try {
         const data = JSON.parse(message);
         if (data.transcription) {
-          console.log(`Transcription received: "${data.transcription}"`);
+          Logger.info('ROS', `Transcription received: "${data.transcription}"`);
           
           // Use ROS interface to publish microphone transcription
           rosInterface.publishMicrophoneTranscription(data.transcription, 
             data.header && data.header.stamp ? data.header.stamp : null);
         }
       } catch (err) {
-        console.error('Error processing microphone message:', err);
+        Logger.error('ROS', `Error processing microphone message: ${err}`);
       }
     });
     
     // Add disconnect logging
     ws.on('close', () => {
-      console.log('Microphone WebSocket client disconnected');
+      Logger.info('APP', 'Microphone sensor deactivated');
     });
   });
 }
@@ -192,26 +195,25 @@ function setupMicrophoneHandlers() {
 // Set up WAV audio streaming WebSocket handlers
 function setupWavAudioHandlers() {
   servers.wavAudio.on('connection', (ws) => {
-    console.log('New WAV audio streaming WebSocket client connected');
+    Logger.info('APP','Audio playback node activated');
     
     // Track client state in the connection
     ws.isReady = true;
     
     ws.on('message', (message) => {
       try {
-        console.log('Received message from WAV audio client:', typeof message === 'string' ? message : `[Binary data: ${message.length} bytes]`);
-        // Handle client messages if needed
+        // Handle received messages if needed
       } catch (error) {
-        console.error('Error processing WAV audio client message:', error);
+        Logger.error('ROS', `Error processing audio data: ${error}`);
       }
     });
     
     ws.on('close', () => {
-      console.log('WAV audio streaming WebSocket client disconnected');
+      Logger.info('APP', 'Audio playback node deactivated');
     });
     
     ws.on('error', (error) => {
-      console.error('WAV audio WebSocket error:', error);
+      Logger.error('ROS', `Audio data processing error: ${error}`);
       ws.isReady = false;
     });
     
@@ -221,8 +223,6 @@ function setupWavAudioHandlers() {
       message: 'Ready to receive audio data',
       sessionState: 'active' // This is important for the client to know it can play audio
     }));
-
-    console.log('Sent connection confirmation to WAV audio client');
   });
 }
 
@@ -238,7 +238,7 @@ function closeAllConnections() {
     }
   });
   
-  console.log('All WebSocket connections closed');
+  Logger.info('APP', 'All ROS sensor nodes deactivated');
 }
 
 module.exports = {

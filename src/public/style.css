@@ -9,14 +9,16 @@ body, html {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  overscroll-behavior: none; /* Prevent pull-to-refresh on mobile */
+  /* Remove this line that prevents pull-to-refresh */
+  /* overscroll-behavior: none; */
 }
 
 /* iOS-specific fixes */
 @supports (-webkit-touch-callout: none) {
   body, html {
     height: -webkit-fill-available;
-    touch-action: manipulation; /* Disable double-tap zoom */
+    /* Make sure touch-action allows normal scrolling behavior */
+    touch-action: manipulation; /* Only disable double-tap zoom, but allow scroll/refresh */
   }
   
   button, select, input {
@@ -44,7 +46,7 @@ body, html {
   padding: 1.8rem;
   border-radius: 12px;
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6);
-  max-width: 650px;
+  max-width: 720px;
   width: 95%;
   margin: 10px;
   backdrop-filter: blur(10px);
@@ -55,11 +57,12 @@ body, html {
 .title {
   text-align: center;
   margin-bottom: 1.5rem;
-  font-size: 24px;
-  font-weight: 600;
-  background: linear-gradient(90deg, #64B5F6, #E040FB);
-  -webkit-background-clip: text;
+  font-size: 38px;  /* Increased from 34px */
+  font-weight: 650;
+  color: transparent;
+  background-image: linear-gradient(90deg, #0080FF, #FF3030);
   background-clip: text;
+  -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   letter-spacing: 0.5px;
 }
@@ -216,7 +219,7 @@ body, html {
   line-height: 1.4;
   margin-top: 15px;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  max-width: 600px;
+  max-width: 700px;
   width: 90%;
   text-align: left;
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
@@ -346,14 +349,14 @@ body.session-active #transcription-log {
   }
   
   .title {
-    font-size: 20px;
+    font-size: 20px;  /* Reverted to original */
     margin-bottom: 1rem;
   }
   
   .container {
     padding: 1.2rem;
     margin: 8px;
-    width: 99%;
+    width: 100%;
   }
   
   #xr-button {
@@ -378,7 +381,7 @@ body.session-active #transcription-log {
   }
   
   .title {
-    font-size: 18px;
+    font-size: 18px;  /* Reverted to original */
   }
   
   .sensor-name {

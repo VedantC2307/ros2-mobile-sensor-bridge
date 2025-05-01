@@ -3,11 +3,19 @@ camera:
   fps: 20 # Max FPS 30
 
 audio:
-  mode: "tts" # Options: "wav", "mp3" or "tts"
+  mode: "wav" # Options: "wav", "mp3" or "tts"
   enabled: true
+  tts:
+    rate: 1.5     # Speech rate: 0.1 (slow) to 10.0 (fast)
+    pitch: 1.0    # Speech pitch: 0.0 (low) to 2.0 (high)
+    volume: 1.0   # Speech volume: 0.0 (silent) to 1.0 (full volume)
+    voice_preference: "" # Leave empty for auto-selection or specify a voice name like "Google US English"
 
 microphone:
   wake_word: "robot"
 
 # Controls debug message logging
-debug_logging: true # Set to true to enable debug logs
+debug_logging: false # Set to true to enable debug logs
+
+mobile-debug-console: false # Set to true to enable the mobile debug console
+color-logging: true # Set to true to enable color logging

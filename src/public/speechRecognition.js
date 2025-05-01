@@ -48,6 +48,41 @@ class SpeechRecognitionManager {
         }
     }
 
+    // Helper to detect iOS devices
+    isIOSDevice() {
+        return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    }
+
+    // Main iOS audio context activation - now using the shared context
+    async ensureAudioContextForIOS() {
+        if (!this.isIOSDevice()) return true;
+        
+        console.log('Ensuring audio context is active for iOS speech recognition');
+        
+        // Use the shared audio context from main.js
+        if (window.sharedAudioContext) {
+            const audioContext = window.sharedAudioContext;
+            
+            // Make sure the context is running
+            if (audioContext.state === 'suspended') {
+                try {
+                    await audioContext.resume();
+                    console.log('Shared audio context resumed for speech recognition');
+                    return true;
+                } catch (err) {
+                    console.error('Failed to resume shared audio context:', err);
+                    return false;
+                }
+            } else {
+                console.log('Shared audio context already running');
+                return true;
+            }
+        } else {
+            console.warn('No shared audio context available for iOS');
+            return false;
+        }
+    }
+
     async startSpeechRecognition(ws, isSessionActive) {
         if (this.speechRecognitionStarted || !isSessionActive) return;
         
@@ -56,6 +91,11 @@ class SpeechRecognitionManager {
         }
 
         try {
+            // For iOS devices, make sure audio is active before starting speech recognition
+            if (this.isIOSDevice()) {
+                await this.ensureAudioContextForIOS();
+            }
+            
             this.recognizer = new webkitSpeechRecognition();
             this.recognizer.continuous = true;
             this.recognizer.interimResults = false;
@@ -125,6 +165,20 @@ class SpeechRecognitionManager {
             this.speechRecognitionStarted = true;
             console.log('Speech recognition started');
             
+            // Keep the audio context active for iOS
+            if (this.isIOSDevice() && window.sharedAudioContext) {
+                // Ensure it stays running with a ping every 5 seconds
+                this.keepAliveInterval = setInterval(() => {
+                    if (window.sharedAudioContext.state === 'suspended') {
+                        window.sharedAudioContext.resume().then(() => {
+                            console.log('Shared context resumed by speech recognition');
+                        }).catch(e => {
+                            console.error('Failed to resume audio context:', e);
+                        });
+                    }
+                }, 5000);
+            }
+            
         } catch (err) {
             console.error('Speech recognition error:', err);
             this.logTranscription(`Failed to start: ${err.message}`);
@@ -141,6 +195,10 @@ class SpeechRecognitionManager {
         if (this.transcriptionTimer) {
             clearTimeout(this.transcriptionTimer);
             this.transcriptionTimer = null;
+        }
+        if (this.keepAliveInterval) {
+            clearInterval(this.keepAliveInterval);
+            this.keepAliveInterval = null;
         }
         this.finalTranscripts = "";
         // Clear log when stopping

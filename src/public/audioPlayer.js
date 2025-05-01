@@ -1,7 +1,7 @@
 /**
- * Audio Player - Receives audio data from WebSocket server and plays it on mobile devices
+ * Enhanced Audio Player - Receives audio data from WebSocket server and plays it
  * Uses configuration from config.yaml to determine whether to enable WAV audio
- * Uses a persistent HTML5 audio element for simple and reliable playback
+ * Supports both Android (HTML5 Audio) and iOS (WebAudio API)
  */
 (function() {
   // Audio playback variables
@@ -11,8 +11,10 @@
   let ws = null;
   let autoReconnect = true;
   
-  // Persistent audio element
-  let audioElement = null;
+  // Persistent audio elements - use multiple to handle rapid playback better (for Android)
+  const audioElements = [];
+  const MAX_AUDIO_ELEMENTS = 3;
+  let currentAudioIndex = 0;
   
   // Audio queue for sequential playback
   let audioQueue = [];
@@ -21,6 +23,16 @@
   // Session state tracking
   let isSessionActive = false;
   
+  // Platform detection
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+  
+  // WebAudio API variables (for iOS)
+  let audioContext = null;
+  let isAudioUnlocked = false;
+  
+  // Add a variable to track active sound sources on iOS
+  let activeSources = [];
+
   // Debug flag - set to false to disable verbose logging
   const DEBUG_MODE = true;
 
@@ -31,56 +43,224 @@
     }
   }
 
-  // Create and inject the audio element into the DOM
-  function createAudioElement() {
-    if (!audioElement) {
-      audioElement = document.createElement('audio');
-      audioElement.id = 'wav-audio-player';
-      audioElement.style.display = 'none';
-      audioElement.controls = false;
-      audioElement.autoplay = true;
-      
-      // Add event listeners for audio events
-      audioElement.onplay = () => {
-        isPlaying = true;
-      };
-      
-      audioElement.onended = () => {
-        isPlaying = false;
+  // Create and inject audio elements into the DOM (for Android)
+  function createAudioElements() {
+    for (let i = 0; i < MAX_AUDIO_ELEMENTS; i++) {
+      if (audioElements.length < MAX_AUDIO_ELEMENTS) {
+        const audioElement = document.createElement('audio');
+        audioElement.id = `wav-audio-player-${i}`;
+        audioElement.style.display = 'none';
+        audioElement.controls = false;
+        audioElement.autoplay = false; // Change to false initially, we'll play manually
+        audioElement.preload = 'auto';
         
-        // Play next item in queue if available
-        if (audioQueue.length > 0) {
-          const nextAudio = audioQueue.shift();
-          playAudioData(nextAudio);
-        }
-      };
-      
-      audioElement.onerror = (e) => {
-        console.error('Audio playback error:', audioElement.error);
-        isPlaying = false;
+        // Add event listeners for audio events
+        audioElement.onplay = () => {
+          isPlaying = true;
+        };
         
-        // Try to play next item in queue even if there was an error
-        if (audioQueue.length > 0) {
-          const nextAudio = audioQueue.shift();
-          setTimeout(() => playAudioData(nextAudio), 500);
-        }
-      };
-      
-      // Append to document body
-      document.body.appendChild(audioElement);
-      
-      // Try to unlock audio on iOS/Safari with first user interaction
-      document.addEventListener('click', () => {
-        if (audioElement) {
-          // Try playing silence to unlock audio
-          const silenceDataURL = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
-          audioElement.src = silenceDataURL;
-          audioElement.play().catch(e => {});
-        }
-      }, { once: true });
+        audioElement.onended = () => {
+          // Mark this audio element as available
+          audioElement.dataset.available = 'true';
+          
+          // Play next item in queue if available
+          playNextInQueue();
+        };
+        
+        audioElement.onerror = (e) => {
+          console.error('Audio playback error:', audioElement.error);
+          // Mark this audio element as available despite error
+          audioElement.dataset.available = 'true';
+          
+          // Try to play next item in queue even if there was an error
+          playNextInQueue();
+        };
+        
+        // Mark as available initially
+        audioElement.dataset.available = 'true';
+        
+        // Append to document body
+        document.body.appendChild(audioElement);
+        audioElements.push(audioElement);
+      }
     }
     
-    return audioElement;
+    return audioElements;
+  }
+  
+  // Get available audio element for playback
+  function getAvailableAudioElement() {
+    // First try to find an available element
+    for (const audio of audioElements) {
+      if (audio.dataset.available === 'true' && (!audio.src || audio.ended || audio.paused)) {
+        audio.dataset.available = 'false'; // Mark as in use
+        return audio;
+      }
+    }
+    
+    // If none available, use round-robin approach
+    currentAudioIndex = (currentAudioIndex + 1) % audioElements.length;
+    const audio = audioElements[currentAudioIndex];
+    
+    // Force cleanup of previous usage
+    try {
+      audio.pause();
+      if (audio.src && audio.src.startsWith('blob:')) {
+        URL.revokeObjectURL(audio.src);
+      }
+    } catch (e) {
+      // Ignore errors during cleanup
+    }
+    
+    audio.dataset.available = 'false'; // Mark as in use
+    return audio;
+  }
+  
+  // Play next audio in queue if available
+  function playNextInQueue() {
+    // Check if we have more items to play
+    if (audioQueue.length > 0) {
+      const nextAudio = audioQueue.shift();
+      playAudioData(nextAudio);
+    } else {
+      isPlaying = false; // Nothing more to play
+    }
+  }
+  
+  // iOS Audio Unlocking - Enhanced for better iOS compatibility
+  async function unlockIOSAudio() {
+    if (!isIOS) return true;
+    
+    debugLog('Attempting to unlock iOS audio...');
+    
+    try {
+      // Try to use the shared audio context from main.js if available
+      if (window.sharedAudioContext) {
+        audioContext = window.sharedAudioContext;
+        debugLog('Using shared audio context from main.js');
+      } else {
+        // Create a new one if not available
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        debugLog('Created new audio context for iOS');
+      }
+      
+      // Resume the audio context (important for iOS)
+      if (audioContext.state === 'suspended') {
+        await audioContext.resume();
+        debugLog('Resumed audio context');
+      }
+      
+      // Create and play a brief silent buffer (crucial for unlocking)
+      const buffer = audioContext.createBuffer(1, 1, audioContext.sampleRate);
+      const source = audioContext.createBufferSource();
+      source.buffer = buffer;
+      source.connect(audioContext.destination);
+      source.start(0);
+      
+      // Add a special oscillator that runs for a moment - this helps on iOS 13+
+      const oscillator = audioContext.createOscillator();
+      oscillator.frequency.value = 440; // A4 note
+      oscillator.connect(audioContext.createGain()).connect(audioContext.destination);
+      oscillator.start(0);
+      setTimeout(() => oscillator.stop(), 10); // Just a brief sound
+      
+      debugLog('iOS audio unlock attempt complete, context state:', audioContext.state);
+      isAudioUnlocked = audioContext.state === 'running';
+      
+      // If we created a new context, make it available to the main.js
+      if (!window.sharedAudioContext && isAudioUnlocked) {
+        window.sharedAudioContext = audioContext;
+        debugLog('Shared newly created audio context with main.js');
+      }
+      
+      return isAudioUnlocked;
+    } catch (err) {
+      console.error('Failed to unlock iOS audio:', err);
+      return false;
+    }
+  }
+  
+  // Play audio using WebAudio API (for iOS)
+  async function playAudioWithWebAudio(audioData) {
+    if (!audioContext) {
+      const unlocked = await unlockIOSAudio();
+      if (!unlocked) return false;
+    }
+    
+    if (audioContext.state === 'suspended') {
+      try {
+        await audioContext.resume();
+        console.log('Audio context resumed before playback');
+      } catch (err) {
+        console.error('Failed to resume audio context:', err);
+        return false;
+      }
+    }
+    
+    try {
+      // Force a silent sound to ensure audio is truly unlocked on iOS
+      if (isIOS && !isPlaying) {
+        const silentBuffer = audioContext.createBuffer(1, 1, audioContext.sampleRate);
+        const silentSource = audioContext.createBufferSource();
+        silentSource.buffer = silentBuffer;
+        silentSource.connect(audioContext.destination);
+        silentSource.start(0);
+        console.log('Played silent buffer to ensure iOS audio is unlocked');
+      }
+      
+      // Convert ArrayBuffer to AudioBuffer
+      const audioBuffer = await decodeAudioData(audioData);
+      
+      // Create source node
+      const source = audioContext.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(audioContext.destination);
+      
+      // Handle completion for queue processing
+      source.onended = () => {
+        // Remove this source from the active sources list when it ends naturally
+        const index = activeSources.indexOf(source);
+        if (index !== -1) {
+          activeSources.splice(index, 1);
+        }
+        
+        debugLog('WebAudio source playback ended');
+        playNextInQueue();
+      };
+      
+      // Add this source to our active sources list
+      activeSources.push(source);
+      
+      // Start playback
+      source.start(0);
+      isPlaying = true;
+      debugLog('WebAudio playback started');
+      
+      return true;
+    } catch (err) {
+      console.error('WebAudio playback error:', err);
+      // Continue to next in queue despite error
+      setTimeout(playNextInQueue, 100);
+      return false;
+    }
+  }
+  
+  // Helper function to decode audio data with proper error handling
+  function decodeAudioData(audioData) {
+    return new Promise((resolve, reject) => {
+      // Some older iOS devices don't support the Promise version of decodeAudioData
+      // So we use the callback version wrapped in a Promise
+      const decodePromise = audioContext.decodeAudioData(
+        audioData,
+        (decodedData) => resolve(decodedData),
+        (err) => reject(err)
+      );
+      
+      // For newer browsers that return a promise from decodeAudioData
+      if (decodePromise && decodePromise instanceof Promise) {
+        return decodePromise;
+      }
+    });
   }
   
   // Get configuration from server
@@ -93,7 +273,19 @@
       
       // Only connect if audio is enabled and mode is set to wav
       if (audioConfig.enabled && audioConfig.mode === 'wav') {
-        createAudioElement();
+        // For Android, create HTML5 audio elements
+        if (!isIOS) {
+          createAudioElements();
+        }
+        
+        // For iOS, prepare WebAudio API
+        if (isIOS) {
+          debugLog('iOS detected, will use WebAudio API for playback');
+          // We'll unlock audio on first user interaction
+          document.body.addEventListener('touchstart', unlockIOSAudio, { once: true });
+          document.body.addEventListener('click', unlockIOSAudio, { once: true });
+        }
+        
         connectWebSocket();
         return true;
       }
@@ -140,6 +332,7 @@
           // Check if this is a session state message
           if (jsonData.sessionState !== undefined) {
             isSessionActive = jsonData.sessionState === 'active';
+            debugLog('Session state updated:', isSessionActive);
           }
         } catch (e) {
           // Non-JSON text message, just log
@@ -153,11 +346,9 @@
       
       // Only process audio data if session is active
       if (!isSessionActive) {
+        debugLog('Session not active, ignoring audio data');
         return;
       }
-      
-      // Ensure the audio element exists
-      createAudioElement();
       
       // Process the audio data
       processAudioData(event.data);
@@ -169,7 +360,11 @@
       
       // Send a message to indicate we're ready to receive audio
       try {
-        ws.send(JSON.stringify({ ready: true, client: 'audioPlayer.js' }));
+        ws.send(JSON.stringify({ 
+          ready: true, 
+          client: 'audioPlayer.js', 
+          ios: isIOS // Tell the server if we're on iOS
+        }));
       } catch (err) {
         console.error('Error sending ready message:', err);
       }
@@ -189,13 +384,8 @@
     };
   }
   
-  // Process received audio data - now with queue support
+  // Process received audio data
   function processAudioData(audioData) {
-    if (!audioElement) {
-      console.error('Audio element not created');
-      return;
-    }
-    
     // Check if we need to add a WAV header
     let processedData = audioData;
     if (audioData.byteLength >= 12) {
@@ -212,22 +402,52 @@
       processedData = addWavHeader(audioData);
     }
     
-    // If audio is currently playing, add to queue
-    if (isPlaying) {
-      audioQueue.push(processedData);
+    // Handle platform-specific playback approach
+    if (isIOS) {
+      // iOS: Use WebAudio API
+      const currentlyPlaying = isPlaying;
+      
+      if (currentlyPlaying) {
+        audioQueue.push(processedData);
+        debugLog('Added to WebAudio queue, queue length:', audioQueue.length);
+      } else {
+        playAudioWithWebAudio(processedData);
+      }
+    } else {
+      // Android: Use HTML5 Audio (existing implementation)
+      if (audioElements.length === 0) {
+        console.error('No audio elements created for playback');
+        return;
+      }
+      
+      const currentlyPlaying = audioElements.some(audio => 
+        audio.dataset.available === 'false' && audio.currentTime > 0 && !audio.paused && !audio.ended
+      );
+      
+      if (currentlyPlaying) {
+        audioQueue.push(processedData);
+        debugLog('Added to HTML5 Audio queue, queue length:', audioQueue.length);
+      } else {
+        playAudioData(processedData);
+      }
+    }
+  }
+  
+  // Function to play audio data with HTML5 Audio (Android)
+  function playAudioData(audioData) {
+    if (isIOS) {
+      return playAudioWithWebAudio(audioData);
+    }
+    
+    // Android approach with HTML5 Audio
+    if (audioElements.length === 0) {
+      console.error('No audio elements available');
       return;
     }
     
-    // Otherwise play immediately
-    playAudioData(processedData);
-  }
-  
-  // Function to actually play the audio data
-  function playAudioData(audioData) {
-    if (!audioElement) {
-      console.error('Audio element not created');
-      return;
-    }
+    // Get an available audio element
+    const audioElement = getAvailableAudioElement();
+    debugLog('Using audio element', audioElement.id);
     
     // Create a blob and object URL
     const blob = new Blob([audioData], { type: 'audio/wav' });
@@ -238,25 +458,29 @@
       URL.revokeObjectURL(audioElement.src);
     }
     
-    // Set new source and play
+    // Set new source
     audioElement.src = url;
+    audioElement.load();
     
     // Attempt to play with error handling
-    audioElement.play()
-      .catch(err => {
-        console.error('Error starting audio playback:', err);
-        isPlaying = false;
-        
-        if (err.name === 'NotAllowedError') {
-          showAudioUnblockNotification();
-        }
+    const playPromise = audioElement.play();
+    
+    if (playPromise !== undefined) {
+      playPromise.then(() => {
+        debugLog('Audio playback started successfully');
+        isPlaying = true;
+      }).catch(err => {
+        console.error('Error starting audio playback:', err, 'for URL:', url.substring(0, 30));
+        audioElement.dataset.available = 'true'; // Mark as available again
         
         // Try next in queue
-        if (audioQueue.length > 0) {
-          const nextAudio = audioQueue.shift();
-          setTimeout(() => playAudioData(nextAudio), 500);
-        }
+        playNextInQueue();
       });
+    } else {
+      // For older browsers that don't return a promise
+      debugLog('Audio play called (legacy mode)');
+      isPlaying = true;
+    }
   }
   
   // Add WAV header to raw PCM data
@@ -315,42 +539,6 @@
     return wavBuffer.buffer;
   }
   
-  // Helper function to show a notification to the user that they need to interact
-  function showAudioUnblockNotification() {
-    if (document.getElementById('audio-unblock-notification')) return;
-    
-    const notification = document.createElement('div');
-    notification.id = 'audio-unblock-notification';
-    notification.style.position = 'fixed';
-    notification.style.top = '20px';
-    notification.style.left = '50%';
-    notification.style.transform = 'translateX(-50%)';
-    notification.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
-    notification.style.color = 'white';
-    notification.style.padding = '10px 20px';
-    notification.style.borderRadius = '5px';
-    notification.style.zIndex = '10000';
-    notification.style.textAlign = 'center';
-    notification.style.maxWidth = '80%';
-    notification.innerHTML = 'Tap anywhere to enable audio playback <br>(Required by your browser)';
-    
-    notification.addEventListener('click', function() {
-      if (audioElement) {
-        audioElement.play().catch(e => {});
-      }
-      this.remove();
-    });
-    
-    document.body.appendChild(notification);
-    
-    // Auto-hide after 10 seconds
-    setTimeout(() => {
-      if (notification.parentNode) {
-        notification.remove();
-      }
-    }, 10000);
-  }
-  
   function disconnectWebSocket() {
     autoReconnect = false;
     if (ws) {
@@ -359,36 +547,168 @@
     }
   }
   
+  // Add a function to completely stop all audio playback
+  function stopAllAudio() {
+    debugLog('Stopping all audio playback');
+    
+    // Clear the queue first
+    audioQueue = [];
+    isPlaying = false;
+    
+    if (isIOS && audioContext) {
+      // For iOS, explicitly stop all tracked audio sources first
+      if (activeSources.length > 0) {
+        debugLog(`Stopping ${activeSources.length} active audio sources`);
+        
+        // Create a copy of the array since we'll be modifying it during iteration
+        const sourcesToStop = [...activeSources];
+        
+        // Stop each source
+        sourcesToStop.forEach(source => {
+          try {
+            source.stop(0);
+            // Disconnect the source from the audio graph
+            source.disconnect();
+            
+            // Remove from activeSources array
+            const index = activeSources.indexOf(source);
+            if (index !== -1) {
+              activeSources.splice(index, 1);
+            }
+          } catch (e) {
+            // Ignore errors if source is already stopped
+            debugLog('Error stopping source:', e.message);
+          }
+        });
+        
+        // Clear the sources array
+        activeSources = [];
+        debugLog('All audio sources stopped and cleared');
+      }
+      
+      // Use a less destructive approach that preserves our audio context
+      try {
+        // Suspend the context to pause processing
+        audioContext.suspend().then(() => {
+          debugLog('Audio context suspended');
+        }).catch(e => {
+          console.error('Failed to suspend audio context:', e);
+        });
+        
+        // Create a silent gain node
+        const silentGain = audioContext.createGain();
+        silentGain.gain.setValueAtTime(0, audioContext.currentTime);
+        silentGain.connect(audioContext.destination);
+        
+        // Play a brief silent buffer to flush the audio pipeline
+        const silentBuffer = audioContext.createBuffer(1, 1024, audioContext.sampleRate);
+        const silentSource = audioContext.createBufferSource();
+        silentSource.buffer = silentBuffer;
+        silentSource.connect(silentGain);
+        silentSource.start(0);
+        
+        // Mark audio as unlocked for future use
+        isAudioUnlocked = true;
+        
+        // We'll resume the context later when needed - no need to create a new one
+        debugLog('Audio output silenced but context preserved for future use');
+      } catch (err) {
+        console.error('Error stopping WebAudio playback:', err);
+      }
+    } else {
+      // For Android HTML5 Audio
+      audioElements.forEach(audio => {
+        try {
+          if (!audio.paused) {
+            audio.pause();
+          }
+          
+          // Clear the source
+          if (audio.src && audio.src.startsWith('blob:')) {
+            URL.revokeObjectURL(audio.src);
+            audio.src = '';
+          }
+          
+          // Reset and mark as available
+          audio.currentTime = 0;
+          audio.dataset.available = 'true';
+        } catch (e) {
+          // Ignore errors during cleanup
+        }
+      });
+      debugLog('Stopped all HTML5 Audio playback');
+    }
+    
+    return true;
+  }
+
+  // Add a new function to safely reinitialize the audio system after stopping
+  async function reinitializeAudio() {
+    if (!isIOS || !audioContext) return false;
+    
+    debugLog('Reinitializing iOS audio system...');
+    
+    try {
+      // Resume the existing audio context if it's suspended
+      if (audioContext.state === 'suspended') {
+        await audioContext.resume();
+        debugLog('Resumed existing audio context:', audioContext.state);
+      }
+      
+      // Play a silent sound to ensure the audio system is active again
+      const silentBuffer = audioContext.createBuffer(1, 1, audioContext.sampleRate);
+      const silentSource = audioContext.createBufferSource();
+      silentSource.buffer = silentBuffer;
+      silentSource.connect(audioContext.destination);
+      silentSource.start(0);
+      
+      debugLog('Audio system reinitialized successfully');
+      isAudioUnlocked = true;
+      return true;
+    } catch (error) {
+      console.error('Failed to reinitialize audio system:', error);
+      return false;
+    }
+  }
+
   // Initialize on page load
   window.addEventListener('DOMContentLoaded', () => {
-    createAudioElement();
     fetchConfig();
     
+    // Create audio elements immediately for Android
+    if (!isIOS) {
+      createAudioElements();
+    }
+    
     // Watch for changes in the audio checkbox
-    const audioCheckbox = document.getElementById('tts-select');
+    const audioCheckbox = document.getElementById('audio-select');
     if (audioCheckbox) {
       audioCheckbox.addEventListener('change', async (e) => {
-        const response = await fetch('/api/config');
-        const config = await response.json();
-        const currentAudioConfig = config.audio || { mode: 'wav', enabled: true };
-        
-        // Only respond to checkbox if we're in WAV mode
-        if (currentAudioConfig.mode === 'wav') {
-          if (e.target.checked) {
-            audioConfig.enabled = true;
-            if (!ws || ws.readyState !== WebSocket.OPEN) {
-              connectWebSocket();
+        try {
+          const response = await fetch('/api/config');
+          const config = await response.json();
+          const currentAudioConfig = config.audio || { mode: 'wav', enabled: true };
+          
+          // Only respond to checkbox if we're in WAV mode
+          if (currentAudioConfig.mode === 'wav') {
+            if (e.target.checked) {
+              audioConfig.enabled = true;
+              
+              if (!ws || ws.readyState !== WebSocket.OPEN) {
+                connectWebSocket();
+              }
+              
+              // For iOS, make sure audio is unlocked
+              if (isIOS) {
+                unlockIOSAudio();
+              }
+            } else {
+              disconnectWebSocket();
+              audioConfig.enabled = false;
             }
-            
-            // Try to play a silent sound to unlock audio
-            if (audioElement) {
-              const silenceDataURL = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
-              audioElement.src = silenceDataURL;
-              audioElement.play().catch(e => {});
-            }
-          } else {
-            disconnectWebSocket();
           }
+        } catch (error) {
+          console.error('Error checking audio config:', error);
         }
       });
     }
@@ -398,25 +718,16 @@
   window.audioPlayer = {
     connectWebSocket,
     disconnectWebSocket,
-    isAudioUnlocked: () => audioElement && !audioElement.paused,
+    isAudioUnlocked: () => isIOS ? isAudioUnlocked : true,
     getAudioConfig: () => audioConfig,
     playAudio: (arrayBuffer) => {
-      if (audioConfig.mode === 'wav' && audioConfig.enabled && audioElement && isSessionActive) {
+      if (audioConfig.mode === 'wav' && audioConfig.enabled && isSessionActive) {
         processAudioData(arrayBuffer);
         return true;
       }
       return false;
     },
-    unlockAudio: () => {
-      if (audioElement) {
-        const silenceDataURL = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
-        return audioElement.play().catch(e => {
-          return false;
-        });
-      }
-      return Promise.reject(new Error('No audio element available'));
-    },
-    hasAudioElement: () => !!audioElement,
+    hasAudioElements: () => isIOS ? (audioContext !== null) : (audioElements.length > 0),
     clearQueue: () => {
       audioQueue = [];
       return true;
@@ -428,10 +739,65 @@
       if (!active) {
         // Clear the queue when session becomes inactive
         audioQueue = [];
-        // Stop any current playback
-        if (audioElement && !audioElement.paused) {
-          audioElement.pause();
+        
+        if (isIOS) {
+          // Nothing special needed for WebAudio - sources will complete naturally
           isPlaying = false;
+        } else {
+          // Stop any current playback for HTML5 Audio
+          audioElements.forEach(audio => {
+            if (!audio.paused) {
+              try {
+                audio.pause();
+                if (audio.src && audio.src.startsWith('blob:')) {
+                  URL.revokeObjectURL(audio.src);
+                  audio.src = '';
+                }
+              } catch (e) {
+                // Ignore errors during pause
+              }
+              audio.dataset.available = 'true';
+            }
+          });
+          isPlaying = false;
+        }
+      }
+      
+      return true;
+    },
+    // Add explicit method to stop all audio playback immediately
+    stopAllAudio: stopAllAudio,
+    
+    // Force unlock audio context for iOS - improved version for external calls
+    unlockAudio: async () => {
+      if (isIOS) {
+        // Try multiple times with increasing delays if needed
+        for (let attempts = 0; attempts < 3; attempts++) {
+          const success = await unlockIOSAudio();
+          if (success) return true;
+          await new Promise(resolve => setTimeout(resolve, 300 * (attempts + 1)));
+        }
+        return false;
+      }
+      return true;
+    },
+    
+    // Add method to properly reinitialize audio after stopping
+    reinitializeAudio: reinitializeAudio,
+    
+    // Add method to force playback of silent sound to keep audio system active
+    keepAudioActive: () => {
+      if (isIOS && audioContext) {
+        try {
+          const silentBuffer = audioContext.createBuffer(1, 1, audioContext.sampleRate);
+          const silentSource = audioContext.createBufferSource();
+          silentSource.buffer = silentBuffer;
+          silentSource.connect(audioContext.destination);
+          silentSource.start(0);
+          return true;
+        } catch (e) {
+          console.warn('Error keeping audio active:', e);
+          return false;
         }
       }
       return true;

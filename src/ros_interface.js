@@ -4,6 +4,7 @@
  */
 const rclnodejs = require('rclnodejs');
 const WebSocket = require('ws');
+const Logger = require('./logger');
 
 // Store all publishers for access from other modules
 let publishers = {
@@ -27,13 +28,13 @@ async function initRos(wssTTS, wssWavAudio) {
   // Create publishers for camera data
   publishers.compressed = node.createPublisher(
     'sensor_msgs/msg/CompressedImage',
-    'camera/image_raw/compressed',
+    'camera/image_raw/compressed', // Changed to avoid topic type conflicts
     { qos: { depth: 10 } }
   );
 
   publishers.cameraInfo = node.createPublisher(
     'sensor_msgs/msg/CameraInfo',
-    'camera/camera_info',
+    'camera/camera_info', // Updated to match the new camera namespace
     { qos: { depth: 10 } }
   );
 
@@ -56,7 +57,7 @@ async function initRos(wssTTS, wssWavAudio) {
     'std_msgs/msg/String',
     'mobile_sensor/tts',
     (msg) => {
-      console.log('Received TTS message:', msg.data);
+      Logger.info('ROS', `Received TTS message: ${msg.data}`);
       
       // Count active clients
       let activeClientCount = 0;
@@ -66,7 +67,7 @@ async function initRos(wssTTS, wssWavAudio) {
         }
       });
       
-      console.log(`TTS clients connected: ${activeClientCount}`);
+      Logger.debug('ROS', `TTS clients connected: ${activeClientCount}`);
       
       // Forward the message to all connected TTS clients
       wssTTS.clients.forEach(client => {
@@ -78,7 +79,7 @@ async function initRos(wssTTS, wssWavAudio) {
     { qos: { depth: 10 } }
   );
   
-  // Update UInt8MultiArray subscriber for WAV audio to handle both 'wav_bytes' and 'tts_wav' topics
+  // Add UInt8MultiArray subscriber for WAV audio to handle both 'wav_bytes' and 'tts_wav' topics
   node.createSubscription(
     'std_msgs/msg/UInt8MultiArray',
     'mobile_sensor/tts_wav',
@@ -103,10 +104,10 @@ async function initRos(wssTTS, wssWavAudio) {
         });
         
         if (clientCount > 0) {
-          console.log(`Forwarded WAV audio: ${buffer.length} bytes to ${clientCount} clients, WAV header: ${hasWavHeader ? 'present' : 'absent'}`);
+          Logger.debug('ROS', `Forwarded WAV audio: ${buffer.length} bytes to ${clientCount} clients.`);
         }
       } catch (error) {
-        console.error('Error processing audio data:', error);
+        Logger.error('ROS', `Error processing audio data: ${error}`);
       }
     },
     { qos: { depth: 10 } }
@@ -119,7 +120,6 @@ async function initRos(wssTTS, wssWavAudio) {
     (msg) => {
       try {
         const buffer = Buffer.from(msg.data);
-        console.log('Received wav_bytes message:', buffer.length);
         
         // Check if the buffer has a WAV header (starts with 'RIFF' and contains 'WAVE')
         const hasWavHeader = 
@@ -138,16 +138,16 @@ async function initRos(wssTTS, wssWavAudio) {
         });
         
         if (clientCount > 0) {
-          console.log(`Forwarded audio data: ${buffer.length} bytes to ${clientCount} clients, WAV header: ${hasWavHeader ? 'present' : 'absent'}`);
+          Logger.debug('ROS', `Forwarded WAV audio: ${buffer.length} bytes to ${clientCount} clients, WAV header: ${hasWavHeader ? 'present' : 'absent'}`);
         }
       } catch (error) {
-        console.error('Error processing audio data:', error);
+        Logger.error('ROS', `Error processing audio data: ${error}`);
       }
     },
     { qos: { depth: 10 } }
   );
   
-  console.log('ROS2 node initialized with camera, pose publisher, TTS and WAV audio subscribers');
+  // console.log('ROS2 node initialized with camera, pose publisher, STT publishers and audio subscribers');
   return node;
 }
 
@@ -162,12 +162,33 @@ function startSpinning() {
 
 // Method to shut down ROS node
 function shutdown() {
-  if (rclnodejs.isShutdown() === false) {
-    rclnodejs.shutdown();
-    console.log('ROS2 node shut down');
-    return true;
-  }
-  return false;
+  return new Promise((resolve) => {
+    Logger.info('ROS', 'Shutting down ROS2 node...');
+    
+    if (rclnodejs.isShutdown() === false) {
+      try {
+        // Clear any remaining callbacks
+        if (rosNode) {
+          for (const pub in publishers) {
+            if (publishers[pub]) {
+              publishers[pub] = null;
+            }
+          }
+        }
+        
+        // Shutdown the node
+        rclnodejs.shutdown();
+        Logger.success('ROS', 'ROS2 node shut down successfully');
+      } catch (error) {
+        Logger.error('ROS', `Error during ROS2 shutdown: ${error}`);
+      }
+    } else {
+      Logger.info('ROS', 'ROS2 already shut down');
+    }
+    
+    // Always resolve to prevent hanging
+    resolve(true);
+  });
 }
 
 // Method to publish camera data
