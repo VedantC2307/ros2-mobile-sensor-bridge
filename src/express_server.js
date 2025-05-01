@@ -24,7 +24,18 @@ function createExpressApp(config) {
 
   // Add an API endpoint to expose configuration
   app.get('/api/config', (req, res) => {
-    res.json(config);
+    // Prepare a safe version of the config to send to the client
+    const clientConfig = {
+      camera: config.camera || {},
+      audio: config.audio || {},
+      microphone: config.microphone || {},
+      debug: {
+        // Handle nested debug properties
+        mobile_debug_console: config.debug && config.debug['mobile-debug-console'] || false
+      }
+    };
+    
+    res.json(clientConfig);
   });
   
   return app;

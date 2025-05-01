@@ -24,9 +24,15 @@ try {
   config = yaml.load(configFile);
   Logger.success('CONFIG', 'Configuration loaded successfully');
   
-  // Set debug mode from config if available
-  if (config.debug_logging !== undefined) {
-    Logger.setDebugEnabled(config.debug_logging === true);
+  // Set debug mode from config if available - handle new nested structure
+  if (config.debug && config.debug.debug_logging !== undefined) {
+    Logger.setDebugEnabled(config.debug.debug_logging === true);
+  }
+  
+  // Set fancy logging mode from config if available - handle new nested structure
+  if (config.debug && config.debug.color_logging !== undefined) {
+    Logger.setFancyLoggingEnabled(config.debug.color_logging === true);
+    Logger.info('CONFIG', `Fancy logging ${config.debug.color_logging ? 'enabled' : 'disabled'}`);
   }
 } catch (e) {
   // Keep error logs for configuration issues

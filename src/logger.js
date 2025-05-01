@@ -2,6 +2,7 @@
  * Minimal Colorful Console Logger
  * 
  * Provides simple, colorful console logging functionality
+ * with support for both fancy and plain logging formats
  */
 
 const Logger = {
@@ -36,24 +37,35 @@ const Logger = {
   
   // Configuration
   debugEnabled: false,
+  fancyLoggingEnabled: false,
   
   // Enable/disable debug logs
   setDebugEnabled(enabled) {
     this.debugEnabled = enabled;
-    // this.info('LOGGER', `Debug logging ${this.debugEnabled ? 'enabled' : 'disabled'}`);
+  },
+  
+  // Enable/disable fancy logging with colors and formatting
+  setFancyLoggingEnabled(enabled) {
+    this.fancyLoggingEnabled = enabled;
   },
   
   formatMessage(level, module, message) {
-    const timestamp = new Date().toISOString().replace('T', ' ').substr(0, 19);
-    const levelConfig = this.LEVELS[level] || this.LEVELS.INFO;
-    const color = this.COLORS[levelConfig.color];
-    const resetColor = this.COLORS.reset;
-    const brightColor = this.COLORS.bright;
-    
-    return `${this.COLORS.dim}[${timestamp}]${resetColor} ` +
-           `${color}${brightColor}${level.padEnd(7)}${resetColor} ` +
-           `${this.COLORS.yellow}[${module}]${resetColor} ` +
-           `${message}`;
+    // Use fancy formatting if enabled
+    if (this.fancyLoggingEnabled) {
+      const timestamp = new Date().toISOString().replace('T', ' ').substr(0, 19);
+      const levelConfig = this.LEVELS[level] || this.LEVELS.INFO;
+      const color = this.COLORS[levelConfig.color];
+      const resetColor = this.COLORS.reset;
+      const brightColor = this.COLORS.bright;
+      
+      return `${this.COLORS.dim}[${timestamp}]${resetColor} ` +
+             `${color}${brightColor}${level.padEnd(7)}${resetColor} ` +
+             `${this.COLORS.yellow}[${module}]${resetColor} ` +
+             `${message}`;
+    } else {
+      // Just return the plain message for standard console.log format
+      return message;
+    }
   },
   
   log(level, module, message) {
@@ -87,13 +99,21 @@ const Logger = {
   
   // Helper for drawing horizontal lines
   drawLine() {
-    console.log(`${this.COLORS.dim}${'='.repeat(80)}${this.COLORS.reset}`);
+    if (this.fancyLoggingEnabled) {
+      console.log(`${this.COLORS.dim}${'='.repeat(80)}${this.COLORS.reset}`);
+    } else {
+      console.log('='.repeat(80));
+    }
   },
   
   // Helper for drawing section headers
   drawHeader(title) {
     this.drawLine();
-    console.log(`${this.COLORS.bright}${this.COLORS.cyan}${' '.repeat(Math.floor((80 - title.length) / 2))}${title}${this.COLORS.reset}`);
+    if (this.fancyLoggingEnabled) {
+      console.log(`${this.COLORS.bright}${this.COLORS.cyan}${' '.repeat(Math.floor((80 - title.length) / 2))}${title}${this.COLORS.reset}`);
+    } else {
+      console.log(`${' '.repeat(Math.floor((80 - title.length) / 2))}${title}`);
+    }
     this.drawLine();
   }
 };
