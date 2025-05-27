@@ -11,7 +11,8 @@ let publishers = {
     compressed: null,
     cameraInfo: null,
     pose: null,
-    microphone: null // Changed from audio to microphone
+    microphone: null, // Changed from audio to microphone
+    imu: null // Added IMU publisher
 };
 
 // Store node reference
@@ -49,6 +50,13 @@ async function initRos(wssTTS, wssWavAudio) {
   publishers.microphone = node.createPublisher(
     'std_msgs/msg/String',
     'mobile_sensor/speech',
+    { qos: { depth: 10 } }
+  );
+  
+  // Add IMU publisher for iOS sensor data
+  publishers.imu = node.createPublisher(
+    'sensor_msgs/msg/Imu',
+    'mobile_sensor/imu',
     { qos: { depth: 10 } }
   );
   
@@ -291,6 +299,60 @@ function publishMicrophoneTranscription(transcription, timestamp) {
   return true;
 }
 
+// Method to publish IMU data from iOS sensors
+function publishIMUData(imuData, timestamp) {
+  if (!publishers.imu) return false;
+  
+  // Generate standard header
+  const header = {
+    stamp: timestamp || {
+      sec: Math.floor(Date.now() / 1000),
+      nanosec: (Date.now() % 1000) * 1000000
+    },
+    frame_id: 'imu_frame'
+  };
+  
+  // Create IMU message according to sensor_msgs/msg/Imu format
+  // http://docs.ros.org/en/melodic/api/sensor_msgs/html/msg/Imu.html
+  const imuMsg = {
+    header: header,
+    
+    // Linear acceleration in m/s^2
+    linear_acceleration: {
+      x: imuData.accelerometer.x || 0.0,
+      y: imuData.accelerometer.y || 0.0,
+      z: imuData.accelerometer.z || 0.0
+    },
+    
+    // Angular velocity in rad/s
+    // alpha (z), beta (x), gamma (y) from gyroscope data
+    angular_velocity: {
+      x: imuData.gyroscope.beta || 0.0,  // beta is rotation around x-axis
+      y: imuData.gyroscope.gamma || 0.0, // gamma is rotation around y-axis
+      z: imuData.gyroscope.alpha || 0.0  // alpha is rotation around z-axis
+    },
+    
+    // Orientation as quaternion
+    // We don't have direct quaternion data, so using placeholder values
+    // A more accurate implementation would calculate quaternions from raw magnetometer data
+    orientation: {
+      x: 0.0,
+      y: 0.0,
+      z: 0.0,
+      w: 1.0
+    },
+    
+    // Covariance matrices (9x9 arrays) - using default values
+    // -1 indicates that the covariance is unknown
+    orientation_covariance: new Array(9).fill(-1),
+    angular_velocity_covariance: new Array(9).fill(-1),
+    linear_acceleration_covariance: new Array(9).fill(-1)
+  };
+  
+  publishers.imu.publish(imuMsg);
+  return true;
+}
+
 module.exports = {
   initRos,
   startSpinning,
@@ -298,5 +360,6 @@ module.exports = {
   publishCameraData,
   publishPoseData,
   publishMicrophoneTranscription, // Renamed from publishAudioTranscription
+  publishIMUData, // Added for iOS IMU sensor data
   getPublishers: () => publishers
 };

@@ -65,10 +65,6 @@ async function startApp() {
     const port = process.env.PORT || 4000;
     await expressServer.startServer(server, port);
     
-    // Add colorful logging for server startup information
-    // The below line is redundant as it's already handled in express_server.js
-    // Logger.success('SERVER', `HTTPS server running on port ${port}`);
-    
     // Start ROS2 spinning
     rosInterface.startSpinning();
     // Keep application startup success log

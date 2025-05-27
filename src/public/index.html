@@ -63,11 +63,53 @@
         font-size: 10px;
       }
     </style>
-    <!-- Load utility scripts first -->
+    <!-- Device detection script - removed dynamic script loading -->
+    <script>
+      // Load the appropriate camera manager based on device type
+      document.addEventListener('DOMContentLoaded', function() {
+        // Properly detect iOS devices
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+        
+        if (isIOS) {
+          console.log('iOS device detected, using iOS camera manager');
+          // Load the iOS camera manager script
+          const script = document.createElement('script');
+          script.src = 'iosCameraManager.js';
+          script.onload = function() {
+            if (window.IOSCameraManager) {
+              window.cameraManager = new window.IOSCameraManager();
+              console.log('iOS camera manager initialized');
+            } else {
+              console.error('Failed to load iOS camera manager');
+            }
+          };
+          script.onerror = function() {
+            console.error('Failed to load iOS camera manager script');
+            // Fallback to standard camera manager
+            if (window.CameraManager) {
+              window.cameraManager = new window.CameraManager();
+              console.log('Fallback: standard camera manager initialized');
+            }
+          };
+          document.head.appendChild(script);
+        } else {
+          console.log('Non-iOS device detected, using standard camera manager');
+          // Initialize standard camera manager
+          if (window.CameraManager) {
+            window.cameraManager = new window.CameraManager();
+            console.log('Standard camera manager initialized');
+          }
+        }
+      });
+    </script>
+    <!-- Load utility scripts -->
     <script src="camera.js"></script>
+    <script src="iosCameraManager.js"></script>
     <script src="speechRecognition.js"></script>
     <script src="audioPlayer.js"></script>
     <script src="textToSpeech.js"></script>
+    <script src="imuSensor.js"></script>
+    <!-- Load imuSensor.js before main.js to ensure it's available -->
   </head>
   <body>
     <div id="overlay"></div>
@@ -86,12 +128,6 @@
             <div class="connection-status" id="camera-status"></div>
           </label>
           
-          <!-- Camera selection dropdown integrated directly into camera option -->
-          <div class="camera-select-container" id="camera-select-container">
-            <label class="camera-label" for="camera-dropdown">Select Camera:</label>
-            <select id="camera-dropdown"></select>
-          </div>
-          
           <label>
             <div class="sensor-checkbox-container">
               <input type="checkbox" id="pose-select" checked>
@@ -106,6 +142,14 @@
               <span class="sensor-name">Microphone</span>
             </div>
             <div class="connection-status" id="microphone-status"></div>
+          </label>
+          
+          <label>
+            <div class="sensor-checkbox-container">
+              <input type="checkbox" id="imu-select" checked>
+              <span class="sensor-name">IMU Sensor</span>
+            </div>
+            <div class="connection-status" id="imu-status"></div>
           </label>
         </div>
       </div>

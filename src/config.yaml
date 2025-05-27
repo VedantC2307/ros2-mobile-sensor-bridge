@@ -1,9 +1,10 @@
 camera:
   quality: 0.7 # Quality of the image (0.0 - 1.0)
-  fps: 20 # Max FPS 30
+  fps: 30 # Max FPS 30
+  facingMode: "environment" # Options: "environment" (back camera) or "user" (front camera)
 
 audio:
-  mode: "wav" # Options: "wav", "mp3" or "tts"
+  mode: "tts" # Options: "wav", "mp3" or "tts"
   enabled: true
   tts:
     rate: 1.0     # Speech rate: 0.1 (slow) to 10.0 (fast)
@@ -12,11 +13,11 @@ audio:
     voice_preference: "" # Leave empty for auto-selection or specify a voice name like "Google US English"
 
 microphone:
-  wake_word: "robot"
+  wake_word: "hello"
 
 # Controls debug message logging
 debug:
-  color_logging: true # Set to true to enable color logging
-  debug_logging: true # Set to true to enable debug logs
-  mobile-debug-console: true # Set to true to enable the mobile debug console
-  
+  color_logging: false # Set to true to enable color logging
+  debug_logging: false # Set to true to enable debug logs
+  mobile-debug-console: false # Set to true to enable the mobile debug console
+

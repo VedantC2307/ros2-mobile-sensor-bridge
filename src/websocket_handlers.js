@@ -12,7 +12,8 @@ let servers = {
   camera: null,
   tts: null,
   microphone: null, // Changed from audio to microphone for clarity
-  wavAudio: null
+  wavAudio: null,
+  imu: null // Added for iOS IMU sensor data
 };
 
 // Track TTS clients
@@ -26,6 +27,7 @@ function initWebSockets(server) {
   servers.tts = new WebSocket.Server({ noServer: true });
   servers.microphone = new WebSocket.Server({ noServer: true }); // Changed from audio to microphone
   servers.wavAudio = new WebSocket.Server({ noServer: true });
+  servers.imu = new WebSocket.Server({ noServer: true }); // Added for iOS IMU sensor data
   
   // Set up WebSocket route handlers
   server.on('upgrade', (request, socket, head) => {
@@ -45,6 +47,11 @@ function initWebSockets(server) {
       case '/camera':
         servers.camera.handleUpgrade(request, socket, head, (ws) => {
           servers.camera.emit('connection', ws, request);
+        });
+        break;
+      case '/imu':
+        servers.imu.handleUpgrade(request, socket, head, (ws) => {
+          servers.imu.emit('connection', ws, request);
         });
         break;
       case '/microphone': // Changed from /audio to /microphone
@@ -68,6 +75,7 @@ function initWebSockets(server) {
   setupTTSHandlers();
   setupMicrophoneHandlers(); // Changed from setupAudioHandlers
   setupWavAudioHandlers();
+  setupIMUHandlers(); // Added for iOS IMU sensor data
   
   return servers;
 }
@@ -239,6 +247,40 @@ function closeAllConnections() {
   });
   
   Logger.info('APP', 'All ROS sensor nodes deactivated');
+}
+
+// Set up IMU data WebSocket handlers for iOS devices
+function setupIMUHandlers() {
+  servers.imu.on('connection', (ws) => {
+    Logger.info('APP', 'iOS IMU sensor activated');
+    
+    ws.on('message', async (message) => {
+      try {
+        const data = JSON.parse(message);
+        if (data.imu) {
+          // Log the IMU data to the console for debugging
+          Logger.debug('IMU', `Accelerometer: x=${data.imu.accelerometer.x.toFixed(2)}, y=${data.imu.accelerometer.y.toFixed(2)}, z=${data.imu.accelerometer.z.toFixed(2)}`);
+          Logger.debug('IMU', `Gyroscope: alpha=${data.imu.gyroscope.alpha.toFixed(2)}, beta=${data.imu.gyroscope.beta.toFixed(2)}, gamma=${data.imu.gyroscope.gamma.toFixed(2)}`);
+          Logger.debug('IMU', `Magnetometer: x=${data.imu.magnetometer.x.toFixed(2)}, y=${data.imu.magnetometer.y.toFixed(2)}, z=${data.imu.magnetometer.z.toFixed(2)}`);
+          
+          // Generate timestamp from IMU data or current time
+          const stamp = {
+            sec: Math.floor(data.imu.timestamp ? data.imu.timestamp / 1000 : Date.now() / 1000),
+            nanosec: (data.imu.timestamp ? data.imu.timestamp % 1000 : Date.now() % 1000) * 1000000
+          };
+          
+          // Use ROS interface to publish IMU data
+          rosInterface.publishIMUData(data.imu, stamp);
+        }
+      } catch (err) {
+        Logger.error('ROS', `Error processing IMU message: ${err}`);
+      }
+    });
+    
+    ws.on('close', () => {
+      Logger.info('APP', 'iOS IMU sensor deactivated');
+    });
+  });
 }
 
 module.exports = {

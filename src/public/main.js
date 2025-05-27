@@ -7,7 +7,10 @@ let poseWs = null;  // Separate WebSocket for pose data
 let cameraWs = null;  // Separate WebSocket for camera data
 let ttsWs = null;  // Reference to TTS WebSocket
 let isSessionActive = false;
+// Expose session active state globally for camera.js
+window.isSessionActive = isSessionActive; 
 let microphoneWs = null;
+let imuWs = null;  // Separate WebSocket for iOS IMU data
 let cameraInterval = null;
 let cameraSendingActive = false;
 
@@ -16,7 +19,8 @@ let enabledSensors = {
   camera: true,
   pose: true,
   microphone: true,
-  audio: true
+  audio: true,
+  imu: true  // Added for iOS IMU sensor data
 };
 
 // Shared audio context for iOS to ensure microphone and audio playback work together
@@ -34,9 +38,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
   
-  // Populate camera dropdown
-  populateCameraDropdown();
-
   // Initialize debug console based on config
   initializeDebugConsole();
 
@@ -71,19 +72,31 @@ document.addEventListener('DOMContentLoaded', () => {
 // Function to initialize UI and attach event listeners
 function initializeUI() {
   // Check sensor data
-  const cameraManager = new CameraManager();
+  // Camera manager should already be initialized in index.html based on device type
   const speechRecognitionManager = new SpeechRecognitionManager();
-  window.cameraManager = cameraManager;
   window.speechRecognitionManager = speechRecognitionManager;
   
   // Add checkbox event listeners
   document.getElementById('camera-select').addEventListener('change', (e) => {
     enabledSensors.camera = e.target.checked;
-    document.getElementById('camera-select-container').style.display = e.target.checked ? 'flex' : 'none';
-    if (!e.target.checked && cameraInterval) {
-      stopCameraSending();
-    } else if (e.target.checked && isSessionActive) {
-      startCameraSending();
+    
+    // Get the current camera manager instance
+    const currentCameraManager = window.cameraManager;
+    
+    if (!e.target.checked && currentCameraManager && 
+        typeof currentCameraManager.stopCamera === 'function') {
+      // Directly call stopCamera on the manager rather than using stopCameraSending
+      currentCameraManager.stopCamera();
+    } else if (e.target.checked && isSessionActive && currentCameraManager) {
+      // Directly start the camera with current WebSocket if available
+      if (cameraWs && cameraWs.readyState === WebSocket.OPEN) {
+        currentCameraManager.startCamera(cameraWs, isSessionActive);
+      } else {
+        // Reconnect camera WebSocket if needed
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const baseUrl = `${protocol}//${window.location.host}`;
+        connectCameraWebSocket(baseUrl);
+      }
     }
   });
 
@@ -100,6 +113,47 @@ function initializeUI() {
       speechRecognitionManager.stopSpeechRecognition();
     } else if (isSessionActive) {
       connectWebSockets();
+    }
+  });
+  
+  // Add IMU sensor checkbox listener
+  document.getElementById('imu-select').addEventListener('change', (e) => {
+    // Only activate IMU on iOS devices
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    
+    if (!isIOS) {
+      console.log('IMU sensor is only available on iOS devices');
+      if (e.target.checked) {
+        // Disable the checkbox if not on iOS
+        e.target.checked = false;
+        enabledSensors.imu = false;
+        alert('IMU sensor is only available on iOS devices');
+      }
+      return;
+    }
+    
+    enabledSensors.imu = e.target.checked;
+    
+    if (e.target.checked && isSessionActive) {
+      if (imuWs && imuWs.readyState === WebSocket.OPEN) {
+        // Don't reconnect if already connected
+        console.log('IMU WebSocket already connected');
+      } else {
+        // Connect the WebSocket
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const baseUrl = `${protocol}//${window.location.host}`;
+        connectIMUWebSocket(baseUrl);
+      }
+    } else if (!e.target.checked && imuWs) {
+      console.log('Stopping IMU sensor');
+      // Close the WebSocket
+      imuWs.close();
+      updateConnectionStatus('imu', 'disconnected');
+      
+      // Also stop the IMU sensor if we have an instance
+      if (window.imuSensorManager && typeof window.imuSensorManager.stopIMUSensor === 'function') {
+        window.imuSensorManager.stopIMUSensor();
+      }
     }
   });
 
@@ -239,49 +293,7 @@ function connectAudioServices() {
     .catch(err => console.error('Failed to check WAV audio config:', err));
 }
 
-// Function to populate camera dropdown
-async function populateCameraDropdown() {
-  try {
-    const dropdown = document.getElementById('camera-dropdown');
-    if (!dropdown) return;
-    
-    // Clear existing options
-    dropdown.innerHTML = '';
-    
-    // Get available cameras
-    const devices = await navigator.mediaDevices.enumerateDevices();
-    const videoDevices = devices.filter(device => device.kind === 'videoinput');
-    
-    if (videoDevices.length === 0) {
-      const option = document.createElement('option');
-      option.text = 'No cameras found';
-      dropdown.add(option);
-      return;
-    }
-    
-    // Add options for each camera
-    videoDevices.forEach((device, index) => {
-      const option = document.createElement('option');
-      option.value = device.deviceId;
-      option.text = device.label || `Camera ${index + 1}`;
-      dropdown.add(option);
-    });
-    
-    // Add event listener to handle camera change
-    dropdown.addEventListener('change', (e) => {
-      if (window.cameraManager && typeof window.cameraManager.switchCamera === 'function') {
-        window.cameraManager.switchCamera(e.target.value);
-      }
-    });
-    
-    // Show container if we have cameras
-    document.getElementById('camera-select-container').style.display = videoDevices.length > 0 ? 'flex' : 'none';
-  } catch (error) {
-    console.error('Error populating camera dropdown:', error);
-  }
-}
-
-// Function to dynamically load audio script based on config
+// Function to load audio script based on config
 async function loadAudioScript() {
   try {
     const response = await fetch('/api/config');
@@ -346,6 +358,23 @@ function connectWebSockets() {
   
   console.log('Connecting WebSockets for enabled sensors...');
   
+  // Check if camera manager is available, if not try to load it
+  if (enabledSensors.camera && !window.cameraManager) {
+    console.warn('Camera manager not initialized yet, trying to initialize it');
+    try {
+      // Try to create a camera manager
+      if (window.CameraManager) {
+        window.cameraManager = new CameraManager();
+      }
+    } catch (e) {
+      console.error('Failed to create camera manager:', e);
+      // Disable camera if we can't initialize it
+      enabledSensors.camera = false;
+      const cameraCheckbox = document.getElementById('camera-select');
+      if (cameraCheckbox) cameraCheckbox.checked = false;
+    }
+  }
+  
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   const baseUrl = `${protocol}//${window.location.host}`;
   
@@ -376,6 +405,11 @@ function connectWebSockets() {
     } else {
       connectAudioServices();
     }
+  }
+  
+  // Connect IMU sensor for iOS devices only
+  if (enabledSensors.imu && (/iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream)) {
+    connectIMUWebSocket(baseUrl);
   }
 }
 
@@ -411,13 +445,14 @@ function connectCameraWebSocket(baseUrl) {
   
   // Connect camera WebSocket
   cameraWs = new WebSocket(`${baseUrl}/camera`);
-  window.cameraWs = cameraWs;
+  window.cameraWs = cameraWs;  // Expose to window for camera.js
   
   cameraWs.onopen = () => {
     console.log('Camera WebSocket connected');
     updateConnectionStatus('camera', 'connected');
-    if (!cameraInterval && isSessionActive) {
-      startCameraSending();
+    // The camera manager will now handle frame sending directly
+    if (isSessionActive && window.cameraManager && enabledSensors.camera) {
+      window.cameraManager.startCamera(cameraWs, isSessionActive);
     }
   };
   cameraWs.onerror = (error) => {
@@ -475,24 +510,80 @@ function connectMicrophoneWebSocket(baseUrl) {
   };
 }
 
+// Function to connect IMU WebSocket for iOS devices
+function connectIMUWebSocket(baseUrl) {
+  updateConnectionStatus('imu', 'connecting');
+  
+  // Initialize IMU sensor manager if it doesn't exist
+  if (!window.imuSensorManager) {
+    window.imuSensorManager = new IMUSensorManager();
+  }
+  
+  // Connect IMU WebSocket directly - iOS will handle the permission prompt
+  imuWs = new WebSocket(`${baseUrl}/imu`);
+  imuWs.onopen = () => {
+    console.log('IMU WebSocket connected');
+    updateConnectionStatus('imu', 'connected');
+    
+    // Start the IMU sensor data collection
+    window.imuSensorManager.startIMUSensor(imuWs, isSessionActive).then(success => {
+      if (!success) {
+        console.error('Failed to start IMU sensor - permission may have been denied');
+        updateConnectionStatus('imu', 'disconnected');
+        enabledSensors.imu = false;
+        const imuCheckbox = document.getElementById('imu-select');
+        if (imuCheckbox) imuCheckbox.checked = false;
+      } else {
+        console.log('IMU sensor started successfully');
+      }
+    });
+  };
+  
+  imuWs.onerror = (error) => {
+    console.error('IMU WebSocket error:', error);
+    updateConnectionStatus('imu', 'disconnected');
+  };
+  
+  imuWs.onclose = () => {
+    updateConnectionStatus('imu', 'disconnected');
+    // Also stop the IMU sensor manager
+    if (window.imuSensorManager) {
+      window.imuSensorManager.stopIMUSensor();
+    }
+    
+    if (isSessionActive) {
+      setTimeout(() => {
+        if (enabledSensors.imu && isSessionActive) {
+          connectIMUWebSocket(baseUrl);
+        }
+      }, 1000);
+    }
+  };
+}
+
 // Function to start camera frame sending
 function startCameraSending() {
-  if (cameraSendingActive) return;
+  // This is now handled directly by the camera manager
+  if (!window.cameraManager || !isSessionActive) return;
   
-  cameraSendingActive = true;
-  cameraInterval = setInterval(() => {
-    if (cameraWs && cameraWs.readyState === WebSocket.OPEN) {
-      const cameraFrame = window.cameraManager.getLastFrame();
-      if (cameraFrame) {
-        cameraWs.send(JSON.stringify({
-          timestamp: Date.now(),
-          camera: cameraFrame,
-          width: window.cameraManager.fixedWidth || 480,
-          height: window.cameraManager.fixedHeight || 640
-        }));
-      }
-    }
-  }, 30);
+  // Check if the camera manager has the required function
+  if (typeof window.cameraManager.startCamera !== 'function') {
+    console.error('Camera manager does not have startCamera method');
+    return;
+  }
+  
+  // Also store the camera websocket in window for toggle camera access
+  window.cameraWs = cameraWs;
+  
+  // If camera WebSocket exists and is open, start the camera
+  if (cameraWs && cameraWs.readyState === WebSocket.OPEN) {
+    window.cameraManager.startCamera(cameraWs, isSessionActive);
+  } else {
+    // Otherwise reconnect the WebSocket
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const baseUrl = `${protocol}//${window.location.host}`;
+    connectCameraWebSocket(baseUrl);
+  }
 }
 
 // Function to stop camera frame sending
@@ -502,6 +593,18 @@ function stopCameraSending() {
     clearInterval(cameraInterval);
     cameraInterval = null;
   }
+  
+  // Make sure to also stop the camera in the camera manager
+  if (window.cameraManager) {
+    try {
+      if (window.cameraManager.cameraStarted) {
+        return window.cameraManager.stopCamera(); // Return the promise
+      }
+    } catch (e) {
+      console.warn('Error stopping camera in stopCameraSending:', e);
+    }
+  }
+  return Promise.resolve(); // Return resolved promise if no camera to stop
 }
 
 // Function to start the AR/XR session
@@ -543,13 +646,22 @@ async function startSession() {
     }
 
     isSessionActive = true;
+    // Update global isSessionActive state
+    window.isSessionActive = isSessionActive;
     xrButton.textContent = 'Stop';
     
     // Connect WebSockets first
     connectWebSockets();
     
-    if (enabledSensors.camera) {
-      window.cameraManager.startCamera(cameraWs, isSessionActive);
+    if (enabledSensors.camera && window.cameraManager) {
+      try {
+        window.cameraManager.startCamera(cameraWs, isSessionActive);
+      } catch (cameraErr) {
+        console.error('Error starting camera:', cameraErr);
+        // Don't fail the whole session due to camera issues
+      }
+    } else if (enabledSensors.camera) {
+      console.warn('Camera enabled but camera manager not available');
     }
 
     document.body.classList.add('session-active');
@@ -564,26 +676,63 @@ async function startSession() {
 function onSessionEnded() {
   if (!isSessionActive) return;  // Prevent multiple calls
   
+  // Explicitly end XR session if still active
+  if (xrSession && xrSession.ended === false) {
+    try {
+      xrSession.end().catch(err => console.warn('Error ending XR session:', err));
+    } catch (e) {
+      console.warn('Exception when ending XR session:', e);
+    }
+  }
+  
   // Reset all connection statuses
-  ['pose', 'camera', 'microphone', 'audio'].forEach(type => {
+  ['pose', 'camera', 'microphone', 'audio', 'imu'].forEach(type => {
     updateConnectionStatus(type, '');
   });
   
   isSessionActive = false;
+  // Update global isSessionActive state
+  window.isSessionActive = isSessionActive;
   document.body.classList.remove('session-active');
   
   // Clean up WebSockets
-  [poseWs, cameraWs, microphoneWs].forEach(ws => {
+  [poseWs, cameraWs, microphoneWs, imuWs].forEach(ws => {
     if (ws) {
       ws.close();
     }
   });
-  poseWs = cameraWs = microphoneWs = null;
+  poseWs = cameraWs = microphoneWs = imuWs = null;
+  
+  // Clean up IMU sensor if active
+  if (window.imuSensorManager && typeof window.imuSensorManager.stopIMUSensor === 'function') {
+    window.imuSensorManager.stopIMUSensor();
+  }
 
-  // Clean up managers
-  window.cameraManager.stopCamera();
-  window.speechRecognitionManager.stopSpeechRecognition();
-  stopCameraSending();
+  // Clean up managers with proper null checks
+  if (window.cameraManager) {
+    try {
+      window.cameraManager.stopCamera().catch(e => {
+        console.warn('Error during async camera stop:', e);
+      });
+    } catch (e) {
+      console.warn('Error stopping camera:', e);
+    }
+  }
+  
+  if (window.speechRecognitionManager) {
+    try {
+      window.speechRecognitionManager.stopSpeechRecognition();
+    } catch (e) {
+      console.warn('Error stopping speech recognition:', e);
+    }
+  }
+  
+  // Call stopCameraSending with the same safeguards from this function
+  try {
+    stopCameraSending();
+  } catch (e) {
+    console.warn('Error in stopCameraSending:', e);
+  }
   
   // Properly disconnect Audio and stop all playback
   if (window.tts) {
