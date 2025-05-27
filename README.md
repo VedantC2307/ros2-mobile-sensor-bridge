@@ -32,7 +32,7 @@ Robotics prototypes often require multiple sensors, each needing calibration and
 1. Clone the repository to your ROS2 workspace `src` directory:
    ```bash
    cd <ros2_workspace>/src/
-   git clone https://github.com/VedantC2307/ros2-android-sensor-bridge.git mobile_sensor
+   git clone -b IOS-development https://github.com/VedantC2307/ros2-android-sensor-bridge.git mobile_sensor
    ```
 
 2. Install Node.js dependencies:
