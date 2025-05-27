@@ -16,6 +16,7 @@ Robotics prototypes often require multiple sensors, each needing calibration and
 - **Camera Stream:** Publishes mobile camera frames as `sensor_msgs/CompressedImage`
 - **Native ROS2 Interface:** Direct integration with ROS2
 - **Spatial Pose Tracking:** Streams WebXR spatial position and orientation as `geometry_msgs/Pose`
+- **IMU Sensor Data:** Publishes accelerometer, gyroscope, and magnetometer data from iOS devices as `sensor_msgs/Imu`
 - **Speech Interface:** Bidirectional audio with speech-to-text and text-to-speech (wake word: "Robot")
 - **Selectable Sensors:** Enable or disable individual sensors as needed
 
@@ -61,6 +62,21 @@ Robotics prototypes often require multiple sensors, each needing calibration and
    source install/setup.bash
    ```
 
+## Configuration
+
+You can customize the behavior of the mobile sensor node by editing the `config.yaml` file located in the src directory:
+
+```yaml
+camera:
+  quality: 0.7  # Image quality (0.0 - 1.0)
+  fps: 30       # Maximum frames per second (up to 30)
+  facingMode: "environment"  # Camera to use: "environment" (back) or "user" (front)
+
+microphone:
+  wake_word: "robot"  # Wake word for voice commands
+
+```
+
 ## Usage
 
 1. Launch the mobile sensor node:
@@ -71,8 +87,10 @@ Robotics prototypes often require multiple sensors, each needing calibration and
 2. Access the web interface on your mobile device:
    - Open a browser on your mobile device and navigate to `https://<your_computer_ip>:4000`
    - Accept the self-signed certificate warning
-   - Grant permissions for camera, microphone, and AR features
+   - Grant permissions for camera, microphone, AR features, and motion/orientation (for IMU)
    - Select desired sensors and click "Start"
+   
+   > **Note:** IMU sensor data is currently supported only on iOS devices (iPhone/iPad). The device must grant motion and orientation permissions for IMU data collection.
 
 ## ROS2 Topics
 
@@ -82,6 +100,7 @@ The package publishes the following topics:
 - `/camera/camera_info` (`sensor_msgs/CameraInfo`): Camera calibration data [testing]
 - `/mobile_sensor/pose` (`geometry_msgs/Pose`): AR pose data
 - `/mobile_sensor/speech` (`std_msgs/String`): Transcribed speech
+- `/mobile_sensor/imu` (`sensor_msgs/Imu`): IMU data from iOS devices
 
 To send text-to-speech messages to the device, publish to:
 
@@ -115,9 +134,10 @@ For Docker deployment, see [Docker instructions](docker/README.md).
 
 Current feature implementation status:
 - [x] **Camera Stream** – Stable; JPEG camera streaming
-- [ ] **Camera Selection Flexibility** – In development; Add support to use rear or front camera
+- [x] **Camera Selection Flexibility** – Implemented; Supports rear or front camera selection via config.yaml
 - [x] **ROS2 Topic Integration** – Stable; all core topics are fully supported
 - [x] **Device Pose Tracking** – Experimental; may show reduced accuracy in visually sparse environments
+- [x] **IMU Data Publishing** – Experimental; Currently supports iOS devices with accelerometer, gyroscope, and magnetometer data
 - [ ] **Speech-to-Text Interface** – Experimental; works best in quiet settings. Wake word customization planned
 - [ ] **Text-to-Speech Interface** – Experimental; .wav file support planned for more natural voice output
 - [ ] **Multi-Device Support** – Beta; Use camera from one smartphone and audio/microphone from another

@@ -13,7 +13,7 @@ audio:
     voice_preference: "" # Leave empty for auto-selection or specify a voice name like "Google US English"
 
 microphone:
-  wake_word: "hello"
+  wake_word: "robot"
 
 # Controls debug message logging
 debug:
