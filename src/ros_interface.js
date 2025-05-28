@@ -12,7 +12,8 @@ let publishers = {
     cameraInfo: null,
     pose: null,
     microphone: null, // Changed from audio to microphone
-    imu: null // Added IMU publisher
+    imu: null, // Added IMU publisher
+    gps: null  // Added GPS publisher
 };
 
 // Store node reference
@@ -53,10 +54,17 @@ async function initRos(wssTTS, wssWavAudio) {
     { qos: { depth: 10 } }
   );
   
-  // Add IMU publisher for iOS sensor data
+  // Add IMU publisher for iOS and Android sensor data
   publishers.imu = node.createPublisher(
     'sensor_msgs/msg/Imu',
     'mobile_sensor/imu',
+    { qos: { depth: 10 } }
+  );
+  
+  // Add GPS publisher for location data using NavSatFix
+  publishers.gps = node.createPublisher(
+    'sensor_msgs/msg/NavSatFix',
+    'mobile_sensor/gps',
     { qos: { depth: 10 } }
   );
   
@@ -299,7 +307,7 @@ function publishMicrophoneTranscription(transcription, timestamp) {
   return true;
 }
 
-// Method to publish IMU data from iOS sensors
+// Method to publish IMU data from iOS and Android sensors
 function publishIMUData(imuData, timestamp) {
   if (!publishers.imu) return false;
   
@@ -332,9 +340,8 @@ function publishIMUData(imuData, timestamp) {
       z: imuData.gyroscope.alpha || 0.0  // alpha is rotation around z-axis
     },
     
-    // Orientation as quaternion
-    // We don't have direct quaternion data, so using placeholder values
-    // A more accurate implementation would calculate quaternions from raw magnetometer data
+    // Set default identity quaternion for orientation
+    // We're no longer collecting orientation data
     orientation: {
       x: 0.0,
       y: 0.0,
@@ -353,6 +360,59 @@ function publishIMUData(imuData, timestamp) {
   return true;
 }
 
+// Method to publish GPS data using sensor_msgs/NavSatFix
+function publishGPSData(gpsData, timestamp) {
+  if (!publishers.gps) return false;
+  
+  // Generate standard header
+  const header = {
+    stamp: timestamp || {
+      sec: Math.floor(Date.now() / 1000),
+      nanosec: (Date.now() % 1000) * 1000000
+    },
+    frame_id: 'gps_frame'
+  };
+  
+  // Handle altitude - can be null from geolocation API
+  const altitude = (gpsData.altitude !== null && !isNaN(gpsData.altitude)) ? gpsData.altitude : 0.0;
+  
+  // Convert accuracy to covariance
+  // GPS accuracy is typically in meters, we'll use it for position covariance
+  const accuracy = gpsData.accuracy || 1.0; // Default to 1 meter if not provided
+  const variance = accuracy * accuracy; // Convert to variance (accuracy squared)
+  
+  // Create position covariance matrix (3x3 matrix flattened to 9 elements)
+  // Only fill diagonal elements [0,4,8] with variance, rest are 0
+  const positionCovariance = new Array(9).fill(0.0);
+  positionCovariance[0] = variance; // x variance (longitude)
+  positionCovariance[4] = variance; // y variance (latitude)
+  positionCovariance[8] = variance; // z variance (altitude)
+  
+  // Create NavSatFix message according to sensor_msgs/msg/NavSatFix format
+  // http://docs.ros.org/en/melodic/api/sensor_msgs/html/msg/NavSatFix.html
+  const navSatFixMsg = {
+    header: header,
+    
+    // Navigation satellite fix status
+    status: {
+      status: 0,    // STATUS_FIX (0 = fix, -1 = no fix)
+      service: 1    // SERVICE_GPS (1 = GPS, 2 = GLONASS, 4 = COMPASS, 8 = GALILEO)
+    },
+    
+    // Position in degrees
+    latitude: gpsData.latitude || 0.0,
+    longitude: gpsData.longitude || 0.0,
+    altitude: altitude,
+    
+    // Position covariance matrix
+    position_covariance: positionCovariance,
+    position_covariance_type: 2  // COVARIANCE_TYPE_DIAGONAL_KNOWN
+  };
+  
+  publishers.gps.publish(navSatFixMsg);
+  return true;
+}
+
 module.exports = {
   initRos,
   startSpinning,
@@ -361,5 +421,6 @@ module.exports = {
   publishPoseData,
   publishMicrophoneTranscription, // Renamed from publishAudioTranscription
   publishIMUData, // Added for iOS IMU sensor data
+  publishGPSData, // Added for GPS location data
   getPublishers: () => publishers
 };

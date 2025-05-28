@@ -11,16 +11,18 @@ let isSessionActive = false;
 window.isSessionActive = isSessionActive; 
 let microphoneWs = null;
 let imuWs = null;  // Separate WebSocket for iOS IMU data
+let gpsWs = null;  // Separate WebSocket for GPS data
 let cameraInterval = null;
 let cameraSendingActive = false;
 
 // Add sensor selection states
 let enabledSensors = {
   camera: true,
-  pose: true,
+  pose: false,  // 3D Position disabled by default
   microphone: true,
   audio: true,
-  imu: true  // Added for iOS IMU sensor data
+  imu: true,  // Added for iOS IMU sensor data
+  gps: true   // Added for GPS location data
 };
 
 // Shared audio context for iOS to ensure microphone and audio playback work together
@@ -76,6 +78,9 @@ function initializeUI() {
   const speechRecognitionManager = new SpeechRecognitionManager();
   window.speechRecognitionManager = speechRecognitionManager;
   
+  // Hide pose data display by default since 3D positioning is disabled
+  poseDiv.style.display = 'none';
+  
   // Add checkbox event listeners
   document.getElementById('camera-select').addEventListener('change', (e) => {
     enabledSensors.camera = e.target.checked;
@@ -118,16 +123,17 @@ function initializeUI() {
   
   // Add IMU sensor checkbox listener
   document.getElementById('imu-select').addEventListener('change', (e) => {
-    // Only activate IMU on iOS devices
+    // Support IMU on both iOS and Android devices
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    const isAndroid = /Android/.test(navigator.userAgent);
     
-    if (!isIOS) {
-      console.log('IMU sensor is only available on iOS devices');
+    if (!isIOS && !isAndroid) {
+      console.log('IMU sensor is only available on iOS and Android devices');
       if (e.target.checked) {
-        // Disable the checkbox if not on iOS
+        // Disable the checkbox if not on iOS or Android
         e.target.checked = false;
         enabledSensors.imu = false;
-        alert('IMU sensor is only available on iOS devices');
+        alert('IMU sensor is only available on iOS and Android devices');
       }
       return;
     }
@@ -153,6 +159,41 @@ function initializeUI() {
       // Also stop the IMU sensor if we have an instance
       if (window.imuSensorManager && typeof window.imuSensorManager.stopIMUSensor === 'function') {
         window.imuSensorManager.stopIMUSensor();
+      }
+    }
+  });
+  
+  // Add GPS sensor checkbox listener
+  document.getElementById('gps-select').addEventListener('change', (e) => {
+    // GPS is available on all modern browsers, but works best on mobile devices
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    const isAndroid = /Android/.test(navigator.userAgent);
+    
+    if (!isIOS && !isAndroid) {
+      console.log('GPS sensor available on this device, but works best on mobile');
+    }
+    
+    enabledSensors.gps = e.target.checked;
+    
+    if (e.target.checked && isSessionActive) {
+      if (gpsWs && gpsWs.readyState === WebSocket.OPEN) {
+        // Don't reconnect if already connected
+        console.log('GPS WebSocket already connected');
+      } else {
+        // Connect the WebSocket
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const baseUrl = `${protocol}//${window.location.host}`;
+        connectGPSWebSocket(baseUrl);
+      }
+    } else if (!e.target.checked && gpsWs) {
+      console.log('Stopping GPS sensor');
+      // Close the WebSocket
+      gpsWs.close();
+      updateConnectionStatus('gps', 'disconnected');
+      
+      // Also stop the GPS sensor if we have an instance
+      if (window.gpsSensorManager && typeof window.gpsSensorManager.stopGPSSensor === 'function') {
+        window.gpsSensorManager.stopGPSSensor();
       }
     }
   });
@@ -407,9 +448,14 @@ function connectWebSockets() {
     }
   }
   
-  // Connect IMU sensor for iOS devices only
-  if (enabledSensors.imu && (/iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream)) {
+  // Connect IMU sensor for iOS and Android devices
+  if (enabledSensors.imu && ((/iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream) || /Android/.test(navigator.userAgent))) {
     connectIMUWebSocket(baseUrl);
+  }
+  
+  // Connect GPS sensor for all devices (works best on mobile)
+  if (enabledSensors.gps) {
+    connectGPSWebSocket(baseUrl);
   }
 }
 
@@ -510,7 +556,7 @@ function connectMicrophoneWebSocket(baseUrl) {
   };
 }
 
-// Function to connect IMU WebSocket for iOS devices
+// Function to connect IMU WebSocket for iOS and Android devices
 function connectIMUWebSocket(baseUrl) {
   updateConnectionStatus('imu', 'connecting');
   
@@ -519,7 +565,7 @@ function connectIMUWebSocket(baseUrl) {
     window.imuSensorManager = new IMUSensorManager();
   }
   
-  // Connect IMU WebSocket directly - iOS will handle the permission prompt
+  // Connect IMU WebSocket - both iOS and Android will handle permission prompts
   imuWs = new WebSocket(`${baseUrl}/imu`);
   imuWs.onopen = () => {
     console.log('IMU WebSocket connected');
@@ -555,6 +601,58 @@ function connectIMUWebSocket(baseUrl) {
       setTimeout(() => {
         if (enabledSensors.imu && isSessionActive) {
           connectIMUWebSocket(baseUrl);
+        }
+      }, 1000);
+    }
+  };
+}
+
+// Function to connect GPS WebSocket for iOS and Android devices
+function connectGPSWebSocket(baseUrl) {
+  updateConnectionStatus('gps', 'connecting');
+  
+  // Initialize GPS sensor manager if it doesn't exist
+  if (!window.gpsSensorManager) {
+    window.gpsSensorManager = new GPSSensorManager();
+  }
+  
+  // Connect GPS WebSocket - both iOS and Android will handle permission prompts
+  gpsWs = new WebSocket(`${baseUrl}/gps`);
+  gpsWs.onopen = () => {
+    console.log('GPS WebSocket connected');
+    updateConnectionStatus('gps', 'connected');
+    
+    // Start the GPS sensor data collection
+    window.gpsSensorManager.startGPSSensor(gpsWs, isSessionActive).then(success => {
+      if (!success) {
+        console.error('Failed to start GPS sensor - permission may have been denied');
+        updateConnectionStatus('gps', 'disconnected');
+        enabledSensors.gps = false;
+        const gpsCheckbox = document.getElementById('gps-select');
+        if (gpsCheckbox) gpsCheckbox.checked = false;
+      } else {
+        console.log('GPS sensor started successfully');
+      }
+    });
+  };
+  
+  gpsWs.onerror = (error) => {
+    console.error('GPS WebSocket error:', error);
+    updateConnectionStatus('gps', 'disconnected');
+  };
+  
+  gpsWs.onclose = () => {
+    updateConnectionStatus('gps', 'disconnected');
+    
+    // Also stop the GPS sensor manager
+    if (window.gpsSensorManager) {
+      window.gpsSensorManager.stopGPSSensor();
+    }
+    
+    if (isSessionActive) {
+      setTimeout(() => {
+        if (enabledSensors.gps && isSessionActive) {
+          connectGPSWebSocket(baseUrl);
         }
       }, 1000);
     }
@@ -686,7 +784,7 @@ function onSessionEnded() {
   }
   
   // Reset all connection statuses
-  ['pose', 'camera', 'microphone', 'audio', 'imu'].forEach(type => {
+  ['pose', 'camera', 'microphone', 'audio', 'imu', 'gps'].forEach(type => {
     updateConnectionStatus(type, '');
   });
   
@@ -696,12 +794,12 @@ function onSessionEnded() {
   document.body.classList.remove('session-active');
   
   // Clean up WebSockets
-  [poseWs, cameraWs, microphoneWs, imuWs].forEach(ws => {
+  [poseWs, cameraWs, microphoneWs, imuWs, gpsWs].forEach(ws => {
     if (ws) {
       ws.close();
     }
   });
-  poseWs = cameraWs = microphoneWs = imuWs = null;
+  poseWs = cameraWs = microphoneWs = imuWs = gpsWs = null;
   
   // Clean up IMU sensor if active
   if (window.imuSensorManager && typeof window.imuSensorManager.stopIMUSensor === 'function') {

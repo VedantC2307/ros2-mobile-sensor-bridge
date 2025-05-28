@@ -1,7 +1,8 @@
 /**
  * IMU Sensor Manager
- * Handles device orientation and motion data from the device's inertial measurement unit (IMU)
- * Specialized for iOS devices
+ * Handles device motion data from the device's inertial measurement unit (IMU)
+ * Supports both iOS and Android devices
+ * Collects only accelerometer and gyroscope data
  */
 
 class IMUSensorManager {
@@ -11,66 +12,84 @@ class IMUSensorManager {
     this.sampleRate = 60; // Hz
     this.intervalId = null;
     
-    // Store sensor data
+    // Store sensor data - only accelerometer and gyroscope
     this.accelerometerData = { x: 0, y: 0, z: 0 };
     this.gyroscopeData = { alpha: 0, beta: 0, gamma: 0 };
-    this.magnetometerData = { x: 0, y: 0, z: 0 };
     
-    // Check if device is iOS
+    // Device detection
     this.isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    this.isAndroid = /Android/.test(navigator.userAgent);
     
-    // Device motion and orientation permission status
+    // Device motion permission status
     this.permissionGranted = false;
   }
 
   /**
-   * Request permission to access device motion and orientation on iOS
-   * Required for iOS 13+ due to privacy restrictions
+   * Request permission to access device motion data
+   * Required for iOS 13+ and modern Android browsers due to privacy restrictions
    * @returns {Promise} - Resolves when permission is granted, rejects when denied
    */
   async requestPermission() {
+    // For Android devices - check if permission is needed
+    if (this.isAndroid) {
+      console.log('Android device detected, checking if permission is needed...');
+      
+      // Check if DeviceMotionEvent requires permission (modern Android browsers)
+      const hasMotionAPI = typeof DeviceMotionEvent !== 'undefined' && 
+                           typeof DeviceMotionEvent.requestPermission === 'function';
+      
+      if (hasMotionAPI) {
+        try {
+          console.log('Requesting DeviceMotionEvent permission for Android...');
+          const motionState = await DeviceMotionEvent.requestPermission();
+          console.log('Android motion permission state:', motionState);
+          
+          if (motionState === 'granted') {
+            console.log('Android motion permission granted');
+            this.permissionGranted = true;
+            return true;
+          } else {
+            console.warn('Android motion permission denied:', motionState);
+            return false;
+          }
+        } catch (error) {
+          console.error('Error requesting Android sensor permissions:', error);
+          return false;
+        }
+      } else {
+        console.log('Android device: no explicit permission API available, assuming granted');
+        this.permissionGranted = true;
+        return Promise.resolve(true);
+      }
+    }
+    
+    // For non-iOS and non-Android devices
     if (!this.isIOS) {
-      console.log('Not an iOS device, no need to request permission');
+      console.log('Not an iOS/Android device, no need to request permission');
       return Promise.resolve(true);
     }
     
-    // Check for DeviceMotionEvent API first
+    // iOS-specific permission handling
+    // Check for DeviceMotionEvent API
     const hasMotionAPI = typeof DeviceMotionEvent !== 'undefined' && 
                          typeof DeviceMotionEvent.requestPermission === 'function';
-                         
-    // Check for DeviceOrientationEvent API second
-    const hasOrientationAPI = typeof DeviceOrientationEvent !== 'undefined' && 
-                              typeof DeviceOrientationEvent.requestPermission === 'function';
     
     // iOS 13+ requires explicit permission
-    if (hasMotionAPI || hasOrientationAPI) {
+    if (hasMotionAPI) {
       try {
-        console.log('Requesting sensor permissions for iOS device...');
+        console.log('Requesting motion permission for iOS device...');
         
-        let motionState = 'granted'; // Default if API is not available
-        let orientationState = 'granted'; // Default if API is not available
+        // Request permission for DeviceMotionEvent
+        console.log('Requesting DeviceMotionEvent permission...');
+        const motionState = await DeviceMotionEvent.requestPermission();
+        console.log('Motion permission state:', motionState);
         
-        // Request permission for DeviceMotionEvent if available
-        if (hasMotionAPI) {
-          console.log('Requesting DeviceMotionEvent permission...');
-          motionState = await DeviceMotionEvent.requestPermission();
-          console.log('Motion permission state:', motionState);
-        }
-        
-        // Request permission for DeviceOrientationEvent if available
-        if (hasOrientationAPI) {
-          console.log('Requesting DeviceOrientationEvent permission...');
-          orientationState = await DeviceOrientationEvent.requestPermission();
-          console.log('Orientation permission state:', orientationState);
-        }
-        
-        if (motionState === 'granted' && orientationState === 'granted') {
-          console.log('Motion and orientation permissions granted');
+        if (motionState === 'granted') {
+          console.log('Motion permission granted');
           this.permissionGranted = true;
           return true;
         } else {
-          console.warn('Motion or orientation permission denied');
-          console.warn('Motion state:', motionState, 'Orientation state:', orientationState);
+          console.warn('Motion permission denied:', motionState);
           return false;
         }
       } catch (error) {
@@ -91,12 +110,26 @@ class IMUSensorManager {
     this.ws = websocket;
     this.isActive = isSessionActive;
     
-    if (!this.isIOS) {
-      console.log('IMU sensor only implemented for iOS devices');
+    if (!this.isIOS && !this.isAndroid) {
+      console.log('IMU sensor only implemented for iOS and Android devices');
       return false;
     }
     
     try {
+      // Check Android sensor availability first if on Android
+      if (this.isAndroid) {
+        const sensorsAvailable = this.checkAndroidSensorAvailability();
+        if (!sensorsAvailable) {
+          console.error('Required sensors not available on this Android device');
+          if (typeof alert === 'function') {
+            setTimeout(() => {
+              alert('This device does not support the required motion sensors. Some features may not work correctly.');
+            }, 500);
+          }
+          // We don't return false here as we can still try with whatever sensors are available
+        }
+      }
+      
       // Request permission if needed
       console.log('Starting IMU sensor and requesting permissions...');
       const permissionGranted = await this.requestPermission();
@@ -106,7 +139,7 @@ class IMUSensorManager {
         // Show a user-friendly alert
         if (typeof alert === 'function') {
           setTimeout(() => {
-            alert('IMU sensor access was denied. Please enable motion and orientation access in your device settings to use this feature.');
+            alert('IMU sensor access was denied. Please enable motion access in your device settings to use this feature.');
           }, 500);
         }
         return false;
@@ -114,16 +147,16 @@ class IMUSensorManager {
       
       console.log('Permission granted, setting up sensors...');
       
-      // Setup event handlers for sensors
+      // Setup event handlers for accelerometer and gyroscope
       this.setupAccelerometerAndGyroscope();
-      this.setupMagnetometer();
       
       // Start sending data at the specified sample rate
       this.intervalId = setInterval(() => {
         this.sendSensorData();
       }, 1000 / this.sampleRate);
       
-      console.log('iOS IMU sensor manager initialized successfully');
+      const deviceType = this.isIOS ? 'iOS' : 'Android';
+      console.log(`${deviceType} IMU sensor manager initialized successfully`);
       return true;
     } catch (error) {
       console.error('Error initializing IMU sensor:', error);
@@ -138,10 +171,19 @@ class IMUSensorManager {
       
       // Get accelerometer data (in m/s²)
       if (event.acceleration) {
+        // Both iOS and Android provide the same accelerometer data format
         this.accelerometerData = {
           x: event.acceleration.x || 0,
           y: event.acceleration.y || 0,
           z: event.acceleration.z || 0
+        };
+      } else if (event.accelerationIncludingGravity && this.isAndroid) {
+        // Some Android devices may only provide accelerationIncludingGravity
+        // This is a fallback, but note that this includes gravity which might need filtering
+        this.accelerometerData = {
+          x: event.accelerationIncludingGravity.x || 0,
+          y: event.accelerationIncludingGravity.y || 0,
+          z: event.accelerationIncludingGravity.z || 0
         };
       }
       
@@ -156,26 +198,7 @@ class IMUSensorManager {
     });
   }
 
-  // Set up magnetometer listeners
-  setupMagnetometer() {
-    window.addEventListener('deviceorientation', (event) => {
-      if (!this.isActive) return;
-      
-      // Get compass heading from device orientation
-      // Note: This is a simplification as iOS doesn't expose raw magnetometer data directly
-      // alpha: compass direction (degrees), beta: front-to-back tilt (degrees), gamma: left-to-right tilt (degrees)
-      const alpha = event.alpha || 0;  // compass direction
-      const beta = event.beta || 0;    // front/back tilt
-      const gamma = event.gamma || 0;  // left/right tilt
-      
-      // We'll use the orientation values as our "magnetometer" data
-      this.magnetometerData = {
-        x: gamma,
-        y: beta,
-        z: alpha
-      };
-    });
-  }
+
 
   // Send collected sensor data through WebSocket
   sendSensorData() {
@@ -185,13 +208,12 @@ class IMUSensorManager {
     
     const timestamp = Date.now();
     
-    // Create a structured payload
+    // Create a structured payload with only accelerometer and gyroscope data
     const payload = {
       imu: {
         timestamp: timestamp,
         accelerometer: this.accelerometerData,
-        gyroscope: this.gyroscopeData,
-        magnetometer: this.magnetometerData
+        gyroscope: this.gyroscopeData
       }
     };
     
@@ -203,6 +225,19 @@ class IMUSensorManager {
     }
   }
 
+  // Check Android sensor availability
+  checkAndroidSensorAvailability() {
+    // Check if the device supports the required sensor events
+    const hasDeviceMotion = 'ondevicemotion' in window;
+    
+    if (!hasDeviceMotion) {
+      console.warn('Android device missing required DeviceMotion sensor events');
+      return false;
+    }
+    
+    return true;
+  }
+
   // Stop IMU data collection
   stopIMUSensor() {
     this.isActive = false;
@@ -212,7 +247,8 @@ class IMUSensorManager {
       this.intervalId = null;
     }
     
-    console.log('IMU sensor stopped');
+    const deviceType = this.isIOS ? 'iOS' : this.isAndroid ? 'Android' : 'Unknown';
+    console.log(`${deviceType} IMU sensor stopped`);
     return Promise.resolve();
   }
 }

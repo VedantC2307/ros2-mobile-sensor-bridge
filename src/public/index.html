@@ -109,7 +109,8 @@
     <script src="audioPlayer.js"></script>
     <script src="textToSpeech.js"></script>
     <script src="imuSensor.js"></script>
-    <!-- Load imuSensor.js before main.js to ensure it's available -->
+    <script src="gpsSensor.js"></script>
+    <!-- Load sensor scripts before main.js to ensure they're available -->
   </head>
   <body>
     <div id="overlay"></div>
@@ -130,7 +131,7 @@
           
           <label>
             <div class="sensor-checkbox-container">
-              <input type="checkbox" id="pose-select" checked>
+              <input type="checkbox" id="pose-select">
               <span class="sensor-name">3D Position</span>
             </div>
             <div class="connection-status" id="pose-status"></div>
@@ -150,6 +151,14 @@
               <span class="sensor-name">IMU Sensor</span>
             </div>
             <div class="connection-status" id="imu-status"></div>
+          </label>
+          
+          <label>
+            <div class="sensor-checkbox-container">
+              <input type="checkbox" id="gps-select" checked>
+              <span class="sensor-name">GPS Sensor</span>
+            </div>
+            <div class="connection-status" id="gps-status"></div>
           </label>
         </div>
       </div>

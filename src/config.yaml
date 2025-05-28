@@ -1,6 +1,6 @@
 camera:
   quality: 0.7 # Quality of the image (0.0 - 1.0)
-  fps: 30 # Max FPS 30
+  fps: 15 # Max FPS 30
   facingMode: "environment" # Options: "environment" (back camera) or "user" (front camera)
 
 audio:

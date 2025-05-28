@@ -13,7 +13,8 @@ let servers = {
   tts: null,
   microphone: null, // Changed from audio to microphone for clarity
   wavAudio: null,
-  imu: null // Added for iOS IMU sensor data
+  imu: null, // Added for iOS IMU sensor data
+  gps: null  // Added for GPS location data
 };
 
 // Track TTS clients
@@ -27,7 +28,8 @@ function initWebSockets(server) {
   servers.tts = new WebSocket.Server({ noServer: true });
   servers.microphone = new WebSocket.Server({ noServer: true }); // Changed from audio to microphone
   servers.wavAudio = new WebSocket.Server({ noServer: true });
-  servers.imu = new WebSocket.Server({ noServer: true }); // Added for iOS IMU sensor data
+  servers.imu = new WebSocket.Server({ noServer: true }); // Added for iOS and Android IMU sensor data
+  servers.gps = new WebSocket.Server({ noServer: true }); // Added for GPS location data
   
   // Set up WebSocket route handlers
   server.on('upgrade', (request, socket, head) => {
@@ -54,6 +56,11 @@ function initWebSockets(server) {
           servers.imu.emit('connection', ws, request);
         });
         break;
+      case '/gps':
+        servers.gps.handleUpgrade(request, socket, head, (ws) => {
+          servers.gps.emit('connection', ws, request);
+        });
+        break;
       case '/microphone': // Changed from /audio to /microphone
         servers.microphone.handleUpgrade(request, socket, head, (ws) => {
           servers.microphone.emit('connection', ws, request);
@@ -75,7 +82,8 @@ function initWebSockets(server) {
   setupTTSHandlers();
   setupMicrophoneHandlers(); // Changed from setupAudioHandlers
   setupWavAudioHandlers();
-  setupIMUHandlers(); // Added for iOS IMU sensor data
+  setupIMUHandlers(); // Added for iOS and Android IMU sensor data
+  setupGPSHandlers(); // Added for GPS location data
   
   return servers;
 }
@@ -249,10 +257,10 @@ function closeAllConnections() {
   Logger.info('APP', 'All ROS sensor nodes deactivated');
 }
 
-// Set up IMU data WebSocket handlers for iOS devices
+// Set up IMU data WebSocket handlers for iOS and Android devices
 function setupIMUHandlers() {
   servers.imu.on('connection', (ws) => {
-    Logger.info('APP', 'iOS IMU sensor activated');
+    Logger.info('APP', 'IMU sensor activated');
     
     ws.on('message', async (message) => {
       try {
@@ -261,7 +269,6 @@ function setupIMUHandlers() {
           // Log the IMU data to the console for debugging
           Logger.debug('IMU', `Accelerometer: x=${data.imu.accelerometer.x.toFixed(2)}, y=${data.imu.accelerometer.y.toFixed(2)}, z=${data.imu.accelerometer.z.toFixed(2)}`);
           Logger.debug('IMU', `Gyroscope: alpha=${data.imu.gyroscope.alpha.toFixed(2)}, beta=${data.imu.gyroscope.beta.toFixed(2)}, gamma=${data.imu.gyroscope.gamma.toFixed(2)}`);
-          Logger.debug('IMU', `Magnetometer: x=${data.imu.magnetometer.x.toFixed(2)}, y=${data.imu.magnetometer.y.toFixed(2)}, z=${data.imu.magnetometer.z.toFixed(2)}`);
           
           // Generate timestamp from IMU data or current time
           const stamp = {
@@ -278,7 +285,42 @@ function setupIMUHandlers() {
     });
     
     ws.on('close', () => {
-      Logger.info('APP', 'iOS IMU sensor deactivated');
+      Logger.info('APP', 'IMU sensor deactivated');
+    });
+  });
+}
+
+// Set up GPS data WebSocket handlers for iOS and Android devices
+function setupGPSHandlers() {
+  servers.gps.on('connection', (ws) => {
+    Logger.info('APP', 'GPS sensor activated');
+    
+    ws.on('message', async (message) => {
+      try {
+        const data = JSON.parse(message);
+        if (data.gps) {
+          // Log the GPS data to the console for debugging
+          Logger.debug('GPS', `Location: lat=${data.gps.latitude.toFixed(6)}, long=${data.gps.longitude.toFixed(6)}, alt=${data.gps.altitude.toFixed(2)}`);
+          if (data.gps.accuracy) {
+            Logger.debug('GPS', `Accuracy: ${data.gps.accuracy.toFixed(2)}m, Heading: ${data.gps.heading?.toFixed(2) || 'N/A'}, Speed: ${data.gps.speed?.toFixed(2) || 'N/A'}m/s`);
+          }
+          
+          // Generate timestamp from GPS data or current time
+          const stamp = {
+            sec: Math.floor(data.gps.timestamp ? data.gps.timestamp / 1000 : Date.now() / 1000),
+            nanosec: (data.gps.timestamp ? data.gps.timestamp % 1000 : Date.now() % 1000) * 1000000
+          };
+          
+          // Use ROS interface to publish GPS data
+          rosInterface.publishGPSData(data.gps, stamp);
+        }
+      } catch (err) {
+        Logger.error('ROS', `Error processing GPS message: ${err}`);
+      }
+    });
+    
+    ws.on('close', () => {
+      Logger.info('APP', 'GPS sensor deactivated');
     });
   });
 }
