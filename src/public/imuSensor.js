@@ -164,6 +164,39 @@ class IMUSensorManager {
     }
   }
 
+  // Start IMU data collection and transmission without requesting permission (assumes already granted)
+  async startIMUSensorWithoutPermission(websocket, isSessionActive) {
+    try {
+      this.ws = websocket;  // Use consistent property name
+      this.websocket = websocket;  // Keep backup for compatibility
+      this.isActive = isSessionActive;
+      
+      // Check if we already have permission (for iOS) or if we're on Android
+      if (this.isIOS && !this.permissionGranted) {
+        console.warn('Permission not granted for iOS IMU sensor, cannot start without permission');
+        return false;
+      }
+      
+      // For Android or when iOS permission is already granted, proceed directly
+      console.log('Starting IMU sensor with existing permissions...');
+      
+      // Setup event handlers for accelerometer and gyroscope
+      this.setupAccelerometerAndGyroscope();
+      
+      // Start sending data at the specified sample rate
+      this.intervalId = setInterval(() => {
+        this.sendSensorData();
+      }, 1000 / this.sampleRate);
+      
+      const deviceType = this.isIOS ? 'iOS' : 'Android';
+      console.log(`${deviceType} IMU sensor started successfully with existing permissions`);
+      return true;
+    } catch (error) {
+      console.error('Error starting IMU sensor without permission request:', error);
+      return false;
+    }
+  }
+
   // Set up accelerometer and gyroscope listeners
   setupAccelerometerAndGyroscope() {
     window.addEventListener('devicemotion', (event) => {
@@ -198,14 +231,14 @@ class IMUSensorManager {
     });
   }
 
-
-
   // Send collected sensor data through WebSocket
   sendSensorData() {
-    if (!this.isActive || !this.ws || this.ws.readyState !== WebSocket.OPEN) {
+    // Support both ws and websocket properties for backward compatibility
+    const socket = this.ws || this.websocket;
+    if (!this.isActive || !socket || socket.readyState !== WebSocket.OPEN) {
       return;
     }
-    
+
     const timestamp = Date.now();
     
     // Create a structured payload with only accelerometer and gyroscope data
@@ -216,10 +249,10 @@ class IMUSensorManager {
         gyroscope: this.gyroscopeData
       }
     };
-    
+
     // Send as JSON
     try {
-      this.ws.send(JSON.stringify(payload));
+      socket.send(JSON.stringify(payload));
     } catch (error) {
       console.error('Error sending IMU data:', error);
     }

@@ -227,8 +227,66 @@ function initializeUI() {
   });
   
   // Add XR button event listener
-  xrButton.addEventListener('click', () => {
+  xrButton.addEventListener('click', async () => {
     if (!isSessionActive) {
+      // Handle iOS IMU permission request immediately on user interaction
+      if (enabledSensors.imu && /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream) {
+        try {
+          // Initialize IMU sensor manager if it doesn't exist
+          if (!window.imuSensorManager) {
+            window.imuSensorManager = new IMUSensorManager();
+          }
+          
+          // Request permission immediately within user gesture context
+          console.log('Requesting IMU permission during user interaction...');
+          const permissionGranted = await window.imuSensorManager.requestPermission();
+          
+          if (!permissionGranted) {
+            console.warn('IMU permission denied by user');
+            // Disable IMU sensor in UI
+            enabledSensors.imu = false;
+            const imuCheckbox = document.getElementById('imu-select');
+            if (imuCheckbox) imuCheckbox.checked = false;
+          } else {
+            console.log('IMU permission granted during user interaction');
+          }
+        } catch (error) {
+          console.error('Error requesting IMU permission during user interaction:', error);
+          enabledSensors.imu = false;
+          const imuCheckbox = document.getElementById('imu-select');
+          if (imuCheckbox) imuCheckbox.checked = false;
+        }
+      }
+
+      // Handle iOS GPS permission request immediately on user interaction
+      if (enabledSensors.gps && /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream) {
+        try {
+          // Initialize GPS sensor manager if it doesn't exist
+          if (!window.gpsSensorManager) {
+            window.gpsSensorManager = new GPSSensorManager();
+          }
+          
+          // Request permission immediately within user gesture context
+          console.log('Requesting GPS permission during user interaction...');
+          const permissionGranted = await window.gpsSensorManager.requestPermission();
+          
+          if (!permissionGranted) {
+            console.warn('GPS permission denied by user');
+            // Disable GPS sensor in UI
+            enabledSensors.gps = false;
+            const gpsCheckbox = document.getElementById('gps-select');
+            if (gpsCheckbox) gpsCheckbox.checked = false;
+          } else {
+            console.log('GPS permission granted during user interaction');
+          }
+        } catch (error) {
+          console.error('Error requesting GPS permission during user interaction:', error);
+          enabledSensors.gps = false;
+          const gpsCheckbox = document.getElementById('gps-select');
+          if (gpsCheckbox) gpsCheckbox.checked = false;
+        }
+      }
+      
       startSession();
     } else {
       if (xrSession) {
@@ -565,23 +623,32 @@ function connectIMUWebSocket(baseUrl) {
     window.imuSensorManager = new IMUSensorManager();
   }
   
-  // Connect IMU WebSocket - both iOS and Android will handle permission prompts
+  // Connect IMU WebSocket - permission should already be granted from button click
   imuWs = new WebSocket(`${baseUrl}/imu`);
   imuWs.onopen = () => {
     console.log('IMU WebSocket connected');
     updateConnectionStatus('imu', 'connected');
     
-    // Start the IMU sensor data collection
-    window.imuSensorManager.startIMUSensor(imuWs, isSessionActive).then(success => {
+    // Start the IMU sensor data collection (skip permission request since it should be already handled)
+    window.imuSensorManager.startIMUSensorWithoutPermission(imuWs, isSessionActive).then(success => {
       if (!success) {
-        console.error('Failed to start IMU sensor - permission may have been denied');
-        updateConnectionStatus('imu', 'disconnected');
-        enabledSensors.imu = false;
-        const imuCheckbox = document.getElementById('imu-select');
-        if (imuCheckbox) imuCheckbox.checked = false;
+        console.error('Failed to start IMU sensor - using fallback to regular start');
+        // Fallback to regular start if the new method doesn't exist
+        window.imuSensorManager.startIMUSensor(imuWs, isSessionActive).then(fallbackSuccess => {
+          if (!fallbackSuccess) {
+            console.error('Failed to start IMU sensor completely');
+            updateConnectionStatus('imu', 'disconnected');
+            enabledSensors.imu = false;
+            const imuCheckbox = document.getElementById('imu-select');
+            if (imuCheckbox) imuCheckbox.checked = false;
+          }
+        });
       } else {
         console.log('IMU sensor started successfully');
       }
+    }).catch(error => {
+      console.error('Error starting IMU sensor:', error);
+      updateConnectionStatus('imu', 'disconnected');
     });
   };
   
@@ -616,23 +683,32 @@ function connectGPSWebSocket(baseUrl) {
     window.gpsSensorManager = new GPSSensorManager();
   }
   
-  // Connect GPS WebSocket - both iOS and Android will handle permission prompts
+  // Connect GPS WebSocket
   gpsWs = new WebSocket(`${baseUrl}/gps`);
   gpsWs.onopen = () => {
     console.log('GPS WebSocket connected');
     updateConnectionStatus('gps', 'connected');
     
-    // Start the GPS sensor data collection
-    window.gpsSensorManager.startGPSSensor(gpsWs, isSessionActive).then(success => {
+    // Start the GPS sensor data collection (try without permission first if already granted)
+    window.gpsSensorManager.startGPSSensorWithoutPermission(gpsWs, isSessionActive).then(success => {
       if (!success) {
-        console.error('Failed to start GPS sensor - permission may have been denied');
-        updateConnectionStatus('gps', 'disconnected');
-        enabledSensors.gps = false;
-        const gpsCheckbox = document.getElementById('gps-select');
-        if (gpsCheckbox) gpsCheckbox.checked = false;
+        console.log('GPS sensor startup without permission failed, trying with permission request');
+        // Fallback to regular start if the new method doesn't work
+        window.gpsSensorManager.startGPSSensor(gpsWs, isSessionActive).then(fallbackSuccess => {
+          if (!fallbackSuccess) {
+            console.error('Failed to start GPS sensor completely');
+            updateConnectionStatus('gps', 'disconnected');
+            enabledSensors.gps = false;
+            const gpsCheckbox = document.getElementById('gps-select');
+            if (gpsCheckbox) gpsCheckbox.checked = false;
+          }
+        });
       } else {
         console.log('GPS sensor started successfully');
       }
+    }).catch(error => {
+      console.error('Error starting GPS sensor:', error);
+      updateConnectionStatus('gps', 'disconnected');
     });
   };
   
