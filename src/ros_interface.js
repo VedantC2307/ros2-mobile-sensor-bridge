@@ -19,54 +19,91 @@ let publishers = {
 // Store node reference
 let rosNode = null;
 
+// Store configuration for conditional publishing
+let publishConfig = null;
+
 // Initialize the ROS2 node and set up publishers and subscribers
-async function initRos(wssTTS, wssWavAudio) {
+async function initRos(wssTTS, wssWavAudio, config = null) {
   await rclnodejs.init();
+  
+  // Store the configuration for conditional publishing
+  publishConfig = config;
   
   // Create the ROS node
   const node = rclnodejs.createNode('mobile_sensor_node');
   rosNode = node;
   
-  // Create publishers for camera data
-  publishers.compressed = node.createPublisher(
-    'sensor_msgs/msg/CompressedImage',
-    'camera/image_raw/compressed', // Changed to avoid topic type conflicts
-    { qos: { depth: 10 } }
-  );
-
-  publishers.cameraInfo = node.createPublisher(
-    'sensor_msgs/msg/CameraInfo',
-    'camera/camera_info', // Updated to match the new camera namespace
-    { qos: { depth: 10 } }
-  );
-
-  // Add pose publisher
-  publishers.pose = node.createPublisher(
-    'geometry_msgs/msg/Pose',
-    'mobile_sensor/pose',
-    { qos: { depth: 10 } }
-  );
-
-  // Add Microphone publisher (renamed from Audio to clarify this is input)
-  publishers.microphone = node.createPublisher(
-    'std_msgs/msg/String',
-    'mobile_sensor/speech',
-    { qos: { depth: 10 } }
-  );
+  // Get publish configuration, default to all enabled if not specified
+  const publishSensors = (publishConfig && publishConfig.mobile_sensors && publishConfig.mobile_sensors.published_sensors) || {
+    camera: true,
+    pose: true,
+    microphone: true,
+    imu: true,
+    gps: true,
+    audio: true
+  };
   
-  // Add IMU publisher for iOS and Android sensor data
-  publishers.imu = node.createPublisher(
-    'sensor_msgs/msg/Imu',
-    'mobile_sensor/imu',
-    { qos: { depth: 10 } }
-  );
+  // Create publishers conditionally based on configuration
+  if (publishSensors.camera) {
+    publishers.compressed = node.createPublisher(
+      'sensor_msgs/msg/CompressedImage',
+      'camera/image_raw/compressed',
+      { qos: { depth: 10 } }
+    );
+
+    publishers.cameraInfo = node.createPublisher(
+      'sensor_msgs/msg/CameraInfo',
+      'camera/camera_info',
+      { qos: { depth: 10 } }
+    );
+    Logger.info('ROS', 'Camera publishers created');
+  } else {
+    Logger.info('ROS', 'Camera publishing disabled in configuration');
+  }
+
+  if (publishSensors.pose) {
+    publishers.pose = node.createPublisher(
+      'geometry_msgs/msg/Pose',
+      'mobile_sensor/pose',
+      { qos: { depth: 10 } }
+    );
+    Logger.info('ROS', 'Pose publisher created');
+  } else {
+    Logger.info('ROS', 'Pose publishing disabled in configuration');
+  }
+
+  if (publishSensors.microphone) {
+    publishers.microphone = node.createPublisher(
+      'std_msgs/msg/String',
+      'mobile_sensor/speech',
+      { qos: { depth: 10 } }
+    );
+    Logger.info('ROS', 'Microphone publisher created');
+  } else {
+    Logger.info('ROS', 'Microphone publishing disabled in configuration');
+  }
   
-  // Add GPS publisher for location data using NavSatFix
-  publishers.gps = node.createPublisher(
-    'sensor_msgs/msg/NavSatFix',
-    'mobile_sensor/gps',
-    { qos: { depth: 10 } }
-  );
+  if (publishSensors.imu) {
+    publishers.imu = node.createPublisher(
+      'sensor_msgs/msg/Imu',
+      'mobile_sensor/imu',
+      { qos: { depth: 10 } }
+    );
+    Logger.info('ROS', 'IMU publisher created');
+  } else {
+    Logger.info('ROS', 'IMU publishing disabled in configuration');
+  }
+  
+  if (publishSensors.gps) {
+    publishers.gps = node.createPublisher(
+      'sensor_msgs/msg/NavSatFix',
+      'mobile_sensor/gps',
+      { qos: { depth: 10 } }
+    );
+    Logger.info('ROS', 'GPS publisher created');
+  } else {
+    Logger.info('ROS', 'GPS publishing disabled in configuration');
+  }
   
   // Add string subscriber for TTS
   node.createSubscription(
@@ -220,27 +257,30 @@ function publishCameraData(imageBuffer, width, height, timestamp) {
     frame_id: 'camera_frame'
   };
   
-  // Publish CompressedImage message
-  const compressedMsg = {
-    header: header,
-    format: 'jpeg',
-    data: Array.from(imageBuffer)
-  };
-  publishers.compressed.publish(compressedMsg);
+  // Publish CompressedImage message only if publisher exists
+  if (publishers.compressed) {
+    const compressedMsg = {
+      header: header,
+      format: 'jpeg',
+      data: Array.from(imageBuffer)
+    };
+    publishers.compressed.publish(compressedMsg);
+  }
   
-  // Publish CameraInfo message
-  const cameraInfoMsg = {
-    header: header,
-    height: height,
-    width: width,
-    distortion_model: 'plumb_bob',
-    d: [0.0, 0.0, 0.0, 0.0, 0.0],  // Default distortion coefficients
-    k: [  // Default intrinsic camera matrix
-      width, 0.0, width/2,
-      0.0, height, height/2,
-      0.0, 0.0, 1.0
-    ],
-    r: [  // Default rectification matrix (identity)
+  // Publish CameraInfo message only if publisher exists
+  if (publishers.cameraInfo) {
+    const cameraInfoMsg = {
+      header: header,
+      height: height,
+      width: width,
+      distortion_model: 'plumb_bob',
+      d: [0.0, 0.0, 0.0, 0.0, 0.0],  // Default distortion coefficients
+      k: [  // Default intrinsic camera matrix
+        width, 0.0, width/2,
+        0.0, height, height/2,
+        0.0, 0.0, 1.0
+      ],
+      r: [  // Default rectification matrix (identity)
       1.0, 0.0, 0.0,
       0.0, 1.0, 0.0,
       0.0, 0.0, 1.0
@@ -259,8 +299,9 @@ function publishCameraData(imageBuffer, width, height, timestamp) {
       width: width,
       do_rectify: false
     }
-  };
-  publishers.cameraInfo.publish(cameraInfoMsg);
+    };
+    publishers.cameraInfo.publish(cameraInfoMsg);
+  }
   
   return true;
 }

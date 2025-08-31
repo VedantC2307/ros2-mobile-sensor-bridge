@@ -1,22 +1,66 @@
+# ============================================================================
+# Mobile Sensor Bridge Configuration
+# ============================================================================
+# This config file controls the behavior of the mobile sensor bridge
+# that streams sensor data from mobile devices to ROS2 topics
+# ============================================================================
+
+# ============================================================================
+# SENSOR PUBLISHING CONTROL
+# ============================================================================
+
+# Controls which sensors are published as ROS2 topics
+mobile_sensors:
+  published_sensors:
+    camera: true      # Enable camera stream publishing
+    pose: true        # Enable device pose/orientation publishing  
+    microphone: true  # Enable microphone/speech recognition publishing
+    imu: true         # Enable IMU (accelerometer/gyroscope) publishing
+    gps: true         # Enable GPS location publishing
+    audio: true       # Enable audio/TTS publishing
+
+# ============================================================================
+# SENSOR CONFIGURATION
+# ============================================================================
+
+# Camera
 camera:
-  quality: 0.7 # Quality of the image (0.0 - 1.0)
-  fps: 15 # Max FPS 30
-  facingMode: "environment" # Options: "environment" (back camera) or "user" (front camera)
+  quality: 0.7             # Image quality (0.0 = lowest, 1.0 = highest)
+  fps: 30                  # Maximum frames per second (typical: 15-30)
+  facingMode: "user"       # Camera selection:
+                           #   "user" = front-facing camera (selfie camera)
+                           #   "environment" = back-facing camera (main camera)
 
-audio:
-  mode: "tts" # Options: "wav", "mp3" or "tts"
-  enabled: true
-  tts:
-    rate: 1.0     # Speech rate: 0.1 (slow) to 10.0 (fast)
-    pitch: 1.0    # Speech pitch: 0.0 (low) to 2.0 (high)
-    volume: 1.0   # Speech volume: 0.0 (silent) to 1.0 (full volume)
-    voice_preference: "" # Leave empty for auto-selection or specify a voice name like "Google US English"
+# Inertial Measurement Unit (accelerometer + gyroscope)
+imu:
+  sample_rate: 30          # Data sampling rate in Hz (recommended: 10-60Hz)
+                           # Higher rates provide smoother data but use more bandwidth               
 
+
+# Microphone
 microphone:
-  wake_word: "robot"
+  wake_word: "robot"       # Voice activation keyword for speech recognition
 
-# Controls debug message logging
+# Audio   
+audio:
+  mode: "tts"         # Audio output mode:
+                      #   "tts" = Text-to-Speech synthesis
+                      #   "wav" = WAV file playback  
+                      #   "mp3" = MP3 file playback
+  # Text-to-Speech (TTS) Settings
+  tts:
+    rate: 1.0              # Speech rate: 0.1 (very slow) to 10.0 (very fast)
+    pitch: 1.0             # Voice pitch: 0.0 (very low) to 2.0 (very high)  
+    volume: 1.0            # Audio volume: 0.0 (silent) to 1.0 (maximum)
+    voice_preference: ""   # Preferred voice name (empty = auto-select)
+                           # Examples: "Google US English", "Microsoft Zira"
+
+
+# DEBUG AND LOGGING CONFIGURATION
 debug:
-  color_logging: false # Set to true to enable color logging
-  debug_logging: false # Set to true to enable debug logs
-  mobile-debug-console: true # Set to true to enable the mobile debug console
+  color_logging: true           # Enable colored console output
+  debug_logging: false          # Enable detailed debug messages
+  mobile-debug-console: false  # Enable debug console on mobile devices(Shows debug messages directly on phone/tablet)
+
+
+

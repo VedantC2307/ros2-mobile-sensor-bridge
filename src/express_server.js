@@ -29,6 +29,17 @@ function createExpressApp(config) {
       camera: config.camera || {},
       audio: config.audio || {},
       microphone: config.microphone || {},
+      mobile_sensors: config.mobile_sensors || {
+        published_sensors: {
+          camera: true,
+          pose: false,
+          microphone: true,
+          imu: true,
+          gps: true,
+          audio: true
+        }
+      },
+      imu: config.imu || { sample_rate: 60 },
       debug: {
         // Handle nested debug properties
         'mobile-debug-console': config.debug && config.debug['mobile-debug-console'] || false

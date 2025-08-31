@@ -9,7 +9,7 @@ class IMUSensorManager {
   constructor() {
     this.isActive = false;
     this.ws = null;
-    this.sampleRate = 60; // Hz
+    this.sampleRate = 30; // Hz - default value, will be updated from config
     this.intervalId = null;
     
     // Store sensor data - only accelerometer and gyroscope
@@ -22,6 +22,27 @@ class IMUSensorManager {
     
     // Device motion permission status
     this.permissionGranted = false;
+    
+    // Load configuration
+    this.loadConfig();
+  }
+
+  /**
+   * Load IMU configuration from server
+   */
+  async loadConfig() {
+    try {
+      const response = await fetch('/api/config');
+      if (response.ok) {
+        const config = await response.json();
+        if (config.imu && config.imu.sample_rate) {
+          this.sampleRate = config.imu.sample_rate;
+          console.log('IMU sample rate loaded from config:', this.sampleRate, 'Hz');
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to load IMU config, using default sample rate:', this.sampleRate);
+    }
   }
 
   /**

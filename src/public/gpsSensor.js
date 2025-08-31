@@ -8,7 +8,6 @@ class GPSSensorManager {
   constructor() {
     this.isActive = false;
     this.ws = null;
-    this.sampleRate = 2; // Hz - Try 2Hz, fallback to 1Hz if battery drain is high
     this.watchId = null;
     
     // Store GPS data

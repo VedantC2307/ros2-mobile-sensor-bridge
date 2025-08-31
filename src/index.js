@@ -56,8 +56,8 @@ const wsServers = websocketHandlers.initWebSockets(server);
 // Initialize and start the application
 async function startApp() {
   try {
-    // Initialize ROS2 node
-    await rosInterface.initRos(wsServers.tts, wsServers.wavAudio);
+    // Initialize ROS2 node with configuration
+    await rosInterface.initRos(wsServers.tts, wsServers.wavAudio, config);
     // Keep ROS initialization success log
     Logger.success('ROS', 'ROS2 nodes initialized successfully');
     

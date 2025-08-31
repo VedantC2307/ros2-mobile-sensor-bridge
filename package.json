@@ -1,7 +1,7 @@
 {
   "name": "mobile_sensor",
   "version": "0.0.0",
-  "description": "TODO: Package description",
+  "description": "ROS2 Mobile Sensor Bridge",
   "keywords": [],
   "author": "",
   "license": "TODO: License declaration",
