@@ -15,12 +15,12 @@ const expressServer = require('./express_server');
 const websocketHandlers = require('./websocket_handlers');
 
 // Keep app startup header
-Logger.drawHeader('MOBILE SENSOR BRIDGE');
+Logger.drawHeader('Starting Mobile Sensor Bridge');
 
 // Load configuration from YAML file
 let config = {};
 try {
-  const configFile = fs.readFileSync(path.join(__dirname, 'config.yaml'), 'utf8');
+  const configFile = fs.readFileSync(path.join(__dirname, '../../config/config.yaml'), 'utf8');
   config = yaml.load(configFile);
   Logger.success('CONFIG', 'Configuration loaded successfully');
   
@@ -32,7 +32,7 @@ try {
   // Set fancy logging mode from config if available - handle new nested structure
   if (config.debug && config.debug.color_logging !== undefined) {
     Logger.setFancyLoggingEnabled(config.debug.color_logging === true);
-    Logger.info('CONFIG', `Fancy logging ${config.debug.color_logging ? 'enabled' : 'disabled'}`);
+    Logger.info('CONFIG', `Color logging ${config.debug.color_logging ? 'enabled' : 'disabled'}`);
   }
 } catch (e) {
   // Keep error logs for configuration issues

@@ -74,7 +74,7 @@
           console.log('iOS device detected, using iOS camera manager');
           // Load the iOS camera manager script
           const script = document.createElement('script');
-          script.src = 'iosCameraManager.js';
+          script.src = 'sensors/ios-camera-manager.js';
           script.onload = function() {
             if (window.IOSCameraManager) {
               window.cameraManager = new window.IOSCameraManager();
@@ -103,13 +103,13 @@
       });
     </script>
     <!-- Load utility scripts -->
-    <script src="camera.js"></script>
-    <script src="iosCameraManager.js"></script>
-    <script src="speechRecognition.js"></script>
-    <script src="audioPlayer.js"></script>
-    <script src="textToSpeech.js"></script>
-    <script src="imuSensor.js"></script>
-    <script src="gpsSensor.js"></script>
+    <script src="sensors/camera.js"></script>
+    <script src="sensors/ios-camera-manager.js"></script>
+    <script src="sensors/speech-recognition.js"></script>
+    <script src="sensors/audio-player.js"></script>
+    <script src="sensors/text-to-speech.js"></script>
+    <script src="sensors/imu-sensor.js"></script>
+    <script src="sensors/gps-sensor.js"></script>
     <!-- Load sensor scripts before main.js to ensure they're available -->
   </head>
   <body>

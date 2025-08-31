@@ -101,20 +101,20 @@ const Logger = {
   drawLine() {
     if (this.fancyLoggingEnabled) {
       console.log(`${this.COLORS.dim}${'='.repeat(80)}${this.COLORS.reset}`);
-    } else {
-      console.log('='.repeat(80));
     }
+    // Don't draw lines when fancy logging is disabled
   },
   
   // Helper for drawing section headers
   drawHeader(title) {
-    this.drawLine();
     if (this.fancyLoggingEnabled) {
+      this.drawLine();
       console.log(`${this.COLORS.bright}${this.COLORS.cyan}${' '.repeat(Math.floor((80 - title.length) / 2))}${title}${this.COLORS.reset}`);
+      this.drawLine();
     } else {
-      console.log(`${' '.repeat(Math.floor((80 - title.length) / 2))}${title}`);
+      // Just log the title without fancy formatting
+      console.log(title);
     }
-    this.drawLine();
   }
 };
 

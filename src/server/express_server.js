@@ -13,13 +13,13 @@ const Logger = require('./logger'); // Import Logger module with correct capital
 function createExpressApp(config) {
   const app = express();
   
-  // Serve static files from the "public" folder
-  app.use(express.static(path.join(__dirname, 'public')));
+  // Serve static files from the "client" folder
+  app.use(express.static(path.join(__dirname, '../client')));
   app.use(express.json());
 
   // Serve index.html on GET /
   app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+    res.sendFile(path.join(__dirname, '../client', 'index.html'));
   });
 
   // Add an API endpoint to expose configuration
@@ -56,8 +56,8 @@ function createExpressApp(config) {
 function createHttpsServer(app) {
   try {
     const options = {
-      key: fs.readFileSync(path.join(__dirname, 'key.pem')),
-      cert: fs.readFileSync(path.join(__dirname, 'cert.pem')),
+      key: fs.readFileSync(path.join(__dirname, '../ssl/key.pem')),
+      cert: fs.readFileSync(path.join(__dirname, '../ssl/cert.pem')),
     };
     
     return https.createServer(options, app);

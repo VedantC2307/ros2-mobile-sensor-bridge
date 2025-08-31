@@ -1,13 +1,13 @@
-# ============================================================================
+# ====================================================================
 # Mobile Sensor Bridge Configuration
-# ============================================================================
+# ====================================================================
 # This config file controls the behavior of the mobile sensor bridge
 # that streams sensor data from mobile devices to ROS2 topics
-# ============================================================================
+# ====================================================================
 
-# ============================================================================
+# ==========================
 # SENSOR PUBLISHING CONTROL
-# ============================================================================
+# ==========================
 
 # Controls which sensors are published as ROS2 topics
 mobile_sensors:
@@ -19,9 +19,9 @@ mobile_sensors:
     gps: true         # Enable GPS location publishing
     audio: true       # Enable audio/TTS publishing
 
-# ============================================================================
+# =====================
 # SENSOR CONFIGURATION
-# ============================================================================
+# =====================
 
 # Camera
 camera:
@@ -35,7 +35,6 @@ camera:
 imu:
   sample_rate: 30          # Data sampling rate in Hz (recommended: 10-60Hz)
                            # Higher rates provide smoother data but use more bandwidth               
-
 
 # Microphone
 microphone:
@@ -56,9 +55,11 @@ audio:
                            # Examples: "Google US English", "Microsoft Zira"
 
 
+# ================================
 # DEBUG AND LOGGING CONFIGURATION
+# ================================
 debug:
-  color_logging: true           # Enable colored console output
+  color_logging: false           # Enable colored console output
   debug_logging: false          # Enable detailed debug messages
   mobile-debug-console: false  # Enable debug console on mobile devices(Shows debug messages directly on phone/tablet)
 
