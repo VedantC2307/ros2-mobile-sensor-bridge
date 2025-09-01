@@ -1,8 +1,33 @@
-# mobile_sensor (ROS 2) – Mobile Device Sensor Bridge (v2.0)
+# Mobile Sensor Bridge for ROS2 v2.0 🚀
 
-Minimal bridge to expose a phone/tablet as a ROS 2 sensor suite (camera, IMU, GPS, speech I/O, pose) over HTTPS + WebSockets using rclnodejs.
+[![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)](https://github.com/VedantC2307/ros2-mobile-sensor-bridge)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![ROS2](https://img.shields.io/badge/ROS2-Humble-green.svg)](https://docs.ros.org/en/humble/)
+[![Node.js](https://img.shields.io/badge/Node.js-20+-green.svg)](https://nodejs.org/)
 
-## 1. Capabilities
+
+Rapid ROS 2 prototyping bridge: drop any iOS/Android phone or tablet into your ros2 stack and instantly stream camera (JPEG), IMU, GPS, WebXR pose, speech transcription and text-to-speech over a secure HTTPS/WebSocket pipeline powered by rclnodejs—no native app install, just a browser, a YAML config, and one launch. Built for quick perception/audio experiments, field demos, and early integration work with configurable parameters, standardized message types, and a minimal surface for extension.
+
+## What’s New in 2.0
+- iOS support 
+- Added GPS (`/mobile_sensor/gps`)
+- Added IMU publisher (`/mobile_sensor/imu`)
+- Unified speech topic (`/mobile_sensor/speech`)
+- WAV + text TTS channels
+- Config-driven parameters (`config/config.yaml`)
+- Refactored server layout (`src/server/*`)
+
+## Features:
+- Supports iOS and Android (iOS 13+, Android 8+)
+- JPEG camera streaming (configurable FPS/quality, front/back camera selection)
+- IMU (accelerometer + gyro)
+- GPS (longitude, latitude and altitude)
+- Optional WebXR pose 
+- Configurable Wake‑word microphone transcription → `/mobile_sensor/speech`
+- native Text‑to‑speech or .wav audio playback to device
+- YAML central configuration
+- Self‑signed HTTPS for permission unlock (camera/mic/motion)
+
 Publishes:
 - `/camera/image_raw/compressed` (`sensor_msgs/CompressedImage`)
 - `/camera/camera_info` (`sensor_msgs/CameraInfo`)
@@ -16,33 +41,15 @@ Subscribes:
 - `/mobile_sensor/tts_wav` (`std_msgs/UInt8MultiArray`) – raw WAV bytes
 - `/mobile_sensor/wav_bytes` (`std_msgs/UInt8MultiArray`) – legacy WAV topic
 
-Features:
-- iOS and Android (modern browser; iOS 13+, Android 8+)
-- JPEG camera streaming (configurable FPS/quality, front/back selection)
-- IMU (accelerometer + gyro)
-- GPS (NavSatFix with diagonal covariance from accuracy)
-- Optional WebXR pose (published as `geometry_msgs/Pose` when available)
-- Wake‑word gated microphone transcription → `/mobile_sensor/speech`
-- Text‑to‑speech + WAV audio playback to device
-- YAML central configuration
-- Self‑signed HTTPS for permission unlock (camera/mic/motion)
+## Prerequisites
 
-## 2. What’s New in 2.0
-- iOS support (camera, mic, motion sensors, GPS)
-- Added GPS (`/mobile_sensor/gps`)
-- Added IMU publisher (`/mobile_sensor/imu`)
-- Unified speech topic (`/mobile_sensor/speech`)
-- WAV + text TTS channels
-- Config-driven parameters (`config/config.yaml`)
-- Refactored server layout (`src/server/*`)
-
-## 3. Requirements
+### Requirements
 - ROS 2 Humble+
 - Node.js 20+
 - OpenSSL (for certificate generation)
 - Shared Wi‑Fi network between device and ROS host
 
-## 4. Installation
+### Installation
 ```bash
 cd <ros2_ws>/src
 git clone https://github.com/VedantC2307/ros2-mobile-sensor-bridge.git mobile_sensor
@@ -56,19 +63,19 @@ colcon build --packages-select mobile_sensor
 source install/setup.bash
 ```
 
-## 5. Launch
+### Launch
 ```bash
 ros2 launch mobile_sensor mobile_sensors.launch.py
 ```
 Console prints the HTTPS URL (e.g. `https://<host_ip>:4000`).
 
-## 6. Connect Device
+### Connect Device
 1. Open the printed URL in mobile browser (allow self‑signed cert).
 2. Grant permissions: camera, microphone, location, motion sensors.
 3. Select sensors and start streaming.
 
 
-## 7. Typical Commands
+## Usual Commands
 Publish TTS text:
 ```bash
 ros2 topic pub -1 /mobile_sensor/tts std_msgs/msg/String "{data: 'Hello from ROS'}"
@@ -124,3 +131,13 @@ Let us know if these steps help or if you’re still having issues after trying 
 
 ## Contributing
 Contributions are welcome! Please feel free to submit a Pull Request.
+
+---
+
+<div align="center">
+
+**Made with ❤️ for the Robotics Community**
+
+[🌟 Star this repo](https://github.com/VedantC2307/ros2-mobile-sensor-bridge) • [🐛 Report Bug](https://github.com/VedantC2307/ros2-mobile-sensor-bridge/issues) • [💡 Request Feature](https://github.com/VedantC2307/ros2-mobile-sensor-bridge/issues/new)
+
+</div>
