@@ -3,9 +3,9 @@
 <package format="3">
   <name>mobile_sensor</name>
   <version>2.0.0</version>
-  <description>TODO: Package description</description>
+  <description>ROS2 sensor bridge</description>
   <maintainer email="vedantchoudhary16@gmail.com">vedant</maintainer>
-  <license>TODO: License declaration</license>
+  <license>MIT</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 

@@ -8,8 +8,8 @@ imu:
                                 # Higher rates provide smoother data but use more bandwidth 
 
 audio:
-  mode: "tts"                   # Options: "wav", "mp3" or "tts"
-  enabled: true
+  mode: "wav"                   # Options: "wav", "mp3" or "tts"
+  enabled: true                  # REQUIRED: enable WAV playback (was missing -> client skipped connection)
   tts:
     rate: 1.0                   # Speech rate: 0.1 (slow) to 10.0 (fast)
     pitch: 1.0                  # Speech pitch: 0.0 (low) to 2.0 (high)

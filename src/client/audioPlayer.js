@@ -270,6 +270,12 @@
       const config = await response.json();
       audioConfig = config.audio || audioConfig;
       debugLog('Audio configuration loaded:', audioConfig);
+
+      // Backward compatibility: if enabled flag missing, assume true for wav mode
+      if (audioConfig.mode === 'wav' && typeof audioConfig.enabled === 'undefined') {
+        console.warn('[AUDIO] "enabled" flag missing in config.audio; defaulting to enabled=true');
+        audioConfig.enabled = true;
+      }
       
       // Only connect if audio is enabled and mode is set to wav
       if (audioConfig.enabled && audioConfig.mode === 'wav') {
