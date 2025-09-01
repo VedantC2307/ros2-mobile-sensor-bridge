@@ -1,13 +1,33 @@
 # Node.js dependencies
 node_modules/
 package-lock.json
+npm-debug.log*
 
-# SSL certificates
-*.pem
-*.key
-*.crt
-*.cert
-*.csr
+# SSL certificates (generated locally)
+src/ssl/*.pem
+src/ssl/*.key
+src/ssl/*.crt
+src/ssl/*.cert
+src/ssl/*.csr
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE/Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ROS2 build artifacts
+build/
+install/
+log/
+
+# Temporary files
+*.tmp
+*.temp
 
 
 # Compiled JavaScript

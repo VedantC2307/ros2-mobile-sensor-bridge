@@ -11,10 +11,11 @@ def generate_launch_description():
     use_sim_time = LaunchConfiguration('use_sim_time', default='false')
     share_directory = get_package_share_directory('mobile_sensor')
 
-    # Path to your main JS file (using index_2.js)
+    # Path to your main JS file (now in server folder)
     start_js_file = os.path.join(
         share_directory,
         'dist',
+        'server',
         'index.js')
     
     cert_directory = os.path.join(share_directory, 'dist')

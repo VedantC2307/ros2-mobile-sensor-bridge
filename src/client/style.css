@@ -244,10 +244,10 @@ body.session-active #transcription-log {
 
 #transcription-log {
   position: fixed;
-  bottom: 15px;
+  top: 15px;
   left: 15px;
   right: 15px;
-  max-height: 120px;
+  max-height: 100px;
   overflow-y: auto;
   background: rgba(20, 20, 25, 0.85);
   padding: 12px;

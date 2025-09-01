@@ -4,7 +4,9 @@ class CameraManager {
         this.videoTrack = null;
         this.lastCameraFrame = null;
         this.cameraConfig = {
-            facingMode: "environment" // Default value until config is loaded
+            facingMode: "environment", // Default value until config is loaded
+            fps: 15, // Default FPS
+            quality: 0.7 // Default quality
         };
         
         // Fetch camera configuration when created
@@ -19,13 +21,23 @@ class CameraManager {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
             const config = await response.json();
-            if (config.camera && config.camera.facingMode) {
-                this.cameraConfig.facingMode = config.camera.facingMode;
-                console.log('Using camera facing mode from config:', this.cameraConfig.facingMode);
+            if (config.camera) {
+                if (config.camera.facingMode) {
+                    this.cameraConfig.facingMode = config.camera.facingMode;
+                    console.log('Using camera facing mode from config:', this.cameraConfig.facingMode);
+                }
+                if (config.camera.fps) {
+                    this.cameraConfig.fps = config.camera.fps;
+                    console.log('Using camera FPS from config:', this.cameraConfig.fps);
+                }
+                if (config.camera.quality) {
+                    this.cameraConfig.quality = config.camera.quality;
+                    console.log('Using camera quality from config:', this.cameraConfig.quality);
+                }
             }
         } catch (error) {
             console.error('Failed to load camera config:', error);
-            // Keep using the default
+            // Keep using the defaults
         }
     }
 
@@ -76,8 +88,9 @@ class CameraManager {
             const ctx = canvas.getContext('2d');
 
             let lastSentTime = 0;
-            const desiredFps = 30;
+            const desiredFps = this.cameraConfig.fps; // Use FPS from config
             const frameInterval = 1000 / desiredFps;
+            const imageQuality = this.cameraConfig.quality; // Capture quality from config
 
             async function processFrame(videoFrame) {
                 const bitmap = await createImageBitmap(videoFrame);
@@ -94,7 +107,7 @@ class CameraManager {
                 // Convert to JPEG blob
                 const blob = await canvas.convertToBlob({
                     type: 'image/jpeg',
-                    quality: 0.7
+                    quality: imageQuality // Use quality from config
                 });
                 
                 // Convert blob to base64

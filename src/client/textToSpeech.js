@@ -158,22 +158,52 @@ class TextToSpeech {
                     this.isReady = true;
                     // Log voice information to help with debugging
                     console.log(`TTS voices loaded: ${this.voices.length}`);
+                    console.log('Available voices:', this.voices.map(v => `${v.name} (${v.lang})`));
                     
                     // Pre-select and store a consistent voice
                     // Try to find the preferred voice if specified
                     if (this.ttsParams.voice_preference && this.ttsParams.voice_preference.trim() !== "") {
+                        console.log(`Looking for voice preference: "${this.ttsParams.voice_preference}"`);
+                        
+                        // Try exact match first
                         this.selectedVoice = this.voices.find(voice => 
-                            voice.name.includes(this.ttsParams.voice_preference) || 
-                            voice.voiceURI.includes(this.ttsParams.voice_preference)
+                            voice.name === this.ttsParams.voice_preference
                         );
+                        
+                        // If not found, try partial match (case-insensitive)
+                        if (!this.selectedVoice) {
+                            this.selectedVoice = this.voices.find(voice => 
+                                voice.name.toLowerCase().includes(this.ttsParams.voice_preference.toLowerCase()) || 
+                                voice.voiceURI.toLowerCase().includes(this.ttsParams.voice_preference.toLowerCase())
+                            );
+                        }
+                        
+                        // If still not found, try common US English patterns
+                        if (!this.selectedVoice && this.ttsParams.voice_preference.toLowerCase().includes('us english')) {
+                            this.selectedVoice = this.voices.find(voice => 
+                                voice.lang === 'en-US' && 
+                                (voice.name.toLowerCase().includes('us') || 
+                                 voice.name.toLowerCase().includes('english') ||
+                                 voice.name.toLowerCase().includes('america'))
+                            );
+                        }
+                        
+                        if (this.selectedVoice) {
+                            console.log(`Found preferred voice: ${this.selectedVoice.name} (${this.selectedVoice.lang})`);
+                        } else {
+                            console.warn(`Preferred voice "${this.ttsParams.voice_preference}" not found`);
+                        }
                     }
                     
                     if (!this.selectedVoice) {
                         // No preference or preferred voice not found, use default English selection
-                        this.selectedVoice = this.voices.find(voice => voice.lang.startsWith('en')) || this.voices[0];
+                        console.log('Using fallback voice selection...');
+                        this.selectedVoice = this.voices.find(voice => voice.lang === 'en-US') || 
+                                           this.voices.find(voice => voice.lang.startsWith('en')) || 
+                                           this.voices[0];
                     }
                     
-                    console.log(`Selected voice: ${this.selectedVoice?.name || 'default'}`);
+                    console.log(`Selected voice: ${this.selectedVoice?.name || 'default'} (${this.selectedVoice?.lang || 'unknown'})`);
                     
                     if (this.isIOSDevice()) {
                         console.log("iOS voices available:");
