@@ -1,0 +1,409 @@
+body, html {
+  margin: 0;
+  padding: 0;
+  background-color: #121212;
+  color: white;
+  font-family: 'Segoe UI', Roboto, Arial, sans-serif;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  /* Remove this line that prevents pull-to-refresh */
+  /* overscroll-behavior: none; */
+}
+
+/* iOS-specific fixes */
+@supports (-webkit-touch-callout: none) {
+  body, html {
+    height: -webkit-fill-available;
+    /* Make sure touch-action allows normal scrolling behavior */
+    touch-action: manipulation; /* Only disable double-tap zoom, but allow scroll/refresh */
+  }
+  
+  button, select, input {
+    -webkit-appearance: none;
+    -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
+    font-size: 16px; /* Prevent iOS zoom on input focus */
+  }
+  
+  video::-webkit-media-controls {
+    display: none !important;
+  }
+  
+  /* Make buttons more tappable on iOS */
+  .sensor-select label {
+    padding: 1.1rem 1.2rem;
+  }
+  
+  #xr-button {
+    padding: 1rem;
+  }
+}
+
+.container {
+  background: rgba(35, 35, 40, 0.95);
+  padding: 1.8rem;
+  border-radius: 12px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6);
+  max-width: 720px;
+  width: 95%;
+  margin: 10px;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.title {
+  text-align: center;
+  margin-bottom: 1.5rem;
+  font-size: 38px;  /* Increased from 34px */
+  font-weight: 650;
+  color: transparent;
+  background-image: linear-gradient(90deg, #0080FF, #FF3030);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  letter-spacing: 0.5px;
+}
+
+.sensor-section {
+  margin-bottom: 15px;
+}
+
+.section-title {
+  font-size: 16px;
+  font-weight: 500;
+  margin-bottom: 8px;
+  color: #90CAF9;
+}
+
+.sensor-select {
+  position: static;
+  background: none;
+  padding: 0;
+}
+
+.sensor-select label {
+  display: flex;
+  align-items: center;
+  padding: 1rem 1.2rem;
+  margin: 0.6rem 0;
+  background: rgba(50, 50, 60, 0.6);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  justify-content: space-between;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.sensor-select label:hover {
+  background: rgba(70, 70, 80, 0.7);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.sensor-checkbox-container {
+  display: flex;
+  align-items: center;
+}
+
+.sensor-select input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  background: rgba(30, 30, 35, 0.9);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
+  margin-right: 12px;
+  position: relative;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.sensor-select input[type="checkbox"]:checked {
+  background: #4CAF50;
+  border-color: #4CAF50;
+}
+
+.sensor-select input[type="checkbox"]:checked::after {
+  content: '✓';
+  position: absolute;
+  color: white;
+  font-size: 14px;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.sensor-name {
+  font-size: 15px;
+  font-weight: 500;
+}
+
+#xr-button {
+  width: 100%;
+  padding: 0.9rem;
+  font-size: 18px;
+  margin-top: 1.5rem;
+  background: linear-gradient(90deg, #4CAF50, #2E7D32);
+  border: none;
+  border-radius: 8px;
+  color: white;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  box-shadow: 0 4px 10px rgba(46, 125, 50, 0.4);
+}
+
+#xr-button:hover {
+  background: linear-gradient(90deg, #66BB6A, #388E3C);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 15px rgba(46, 125, 50, 0.5);
+}
+
+#xr-button:active {
+  transform: translateY(1px);
+}
+
+#xr-button:disabled {
+  background: linear-gradient(90deg, #9E9E9E, #757575);
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+  opacity: 0.7;
+}
+
+/* Connection status indicator styles */
+.connection-status {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  margin-left: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: all 0.3s ease;
+}
+
+.connected { 
+  background: #43A047; 
+  box-shadow: 0 0 6px rgba(67, 160, 71, 0.6);
+}
+
+.disconnected { 
+  background: #E53935; 
+  box-shadow: 0 0 6px rgba(229, 57, 53, 0.6);
+}
+
+.connecting { 
+  background: #FB8C00;
+  box-shadow: 0 0 6px rgba(251, 140, 0, 0.6);
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.5; }
+  100% { opacity: 1; }
+}
+
+#pose {
+  display: none;
+  background: rgba(35, 35, 40, 0.8);
+  padding: 12px;
+  border-radius: 8px;
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+  line-height: 1.4;
+  margin-top: 15px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  max-width: 700px;
+  width: 90%;
+  text-align: left;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+  overflow-x: auto;
+}
+
+/* Show them only when session is active */
+body.session-active #pose,
+body.session-active #transcription-log {
+  display: block;
+}
+
+#overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: #121212;
+  z-index: -1;
+}
+
+#transcription-log {
+  position: fixed;
+  top: 15px;
+  left: 15px;
+  right: 15px;
+  max-height: 100px;
+  overflow-y: auto;
+  background: rgba(20, 20, 25, 0.85);
+  padding: 12px;
+  border-radius: 10px;
+  font-size: 14px;
+  line-height: 1.4;
+  z-index: 1000;
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+  display: none;
+}
+
+.log-entry {
+  margin: 6px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 6px;
+}
+
+.timestamp {
+  color: #90CAF9;
+  font-size: 0.8em;
+  margin-right: 8px;
+  font-weight: 500;
+}
+
+#wav-status {
+  padding: 8px 12px;
+  margin: 8px 0;
+  font-size: 0.9em;
+  color: #BBDEFB;
+  background: rgba(50, 50, 60, 0.4);
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* Camera select dropdown styling - modified to be inline */
+.camera-select-container {
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: rgba(50, 50, 60, 0.4);
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+#camera-dropdown {
+  flex: 1;
+  min-width: 160px;
+  padding: 8px;
+  background: rgba(35, 35, 40, 0.9);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 5px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  margin-left: 10px;
+}
+
+#camera-dropdown:hover {
+  background: rgba(45, 45, 50, 0.9);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+#camera-dropdown:focus {
+  outline: none;
+  border-color: #90CAF9;
+  box-shadow: 0 0 0 2px rgba(144, 202, 249, 0.3);
+}
+
+#camera-dropdown option {
+  background: rgba(35, 35, 40, 0.9);
+  color: white;
+  padding: 8px;
+}
+
+.camera-label {
+  font-weight: 500;
+  color: #BBDEFB;
+  font-size: 14px;
+}
+
+/* Media query for small screens to stack the dropdown */
+@media (max-width: 480px) {
+  .camera-select-container {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  #camera-dropdown {
+    margin-left: 0;
+    margin-top: 8px;
+    width: 100%;
+  }
+  
+  .title {
+    font-size: 20px;  /* Reverted to original */
+    margin-bottom: 1rem;
+  }
+  
+  .container {
+    padding: 1.2rem;
+    margin: 8px;
+    width: 100%;
+  }
+  
+  #xr-button {
+    padding: 0.9rem;
+    font-size: 16px;
+  }
+  
+  .sensor-select label {
+    padding: 0.8rem 0.9rem;
+  }
+  
+  .section-title {
+    font-size: 15px;
+  }
+}
+
+/* Additional responsive adjustments for very small screens */
+@media (max-width: 360px) {
+  .container {
+    padding: 1rem;
+    width: 99%;
+  }
+  
+  .title {
+    font-size: 18px;  /* Reverted to original */
+  }
+  
+  .sensor-name {
+    font-size: 14px;
+  }
+  
+  .sensor-select label {
+    padding: 0.7rem 0.8rem;
+  }
+  
+  .sensor-select input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    margin-right: 8px;
+  }
+  
+  .camera-label {
+    font-size: 13px;
+  }
+  
+  #camera-dropdown {
+    font-size: 13px;
+    padding: 6px;
+  }
+}

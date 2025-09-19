@@ -1,0 +1,26 @@
+camera:
+  quality: 0.9                  # Quality of the image (0.0 - 0.9)
+  fps: 30                       # Max 30 FPS
+  facingMode: "environment"     # Options: "environment" (back camera) or "user" (front camera)
+
+imu:
+  sample_rate: 30               # Data sampling rate in Hz (recommended: 10-60Hz)
+                                # Higher rates provide smoother data but use more bandwidth 
+
+audio:
+  mode: "wav"                   # Options: "wav", "mp3" or "tts"
+  enabled: true                  # REQUIRED: enable WAV playback (was missing -> client skipped connection)
+  tts:
+    rate: 1.0                   # Speech rate: 0.1 (slow) to 10.0 (fast)
+    pitch: 1.0                  # Speech pitch: 0.0 (low) to 2.0 (high)
+    volume: 1.0                 # Speech volume: 0.0 (silent) to 1.0 (full volume)
+    # voice_preference: ""      # TODO
+
+microphone:
+  wake_word: "robot"
+
+# Controls debug message logging
+debug:
+  color_logging: false # Set to true to enable color logging
+  debug_logging: false # Set to true to enable debug logs
+  mobile-debug-console: true # Set to true to enable the mobile debug console

@@ -1,119 +1,121 @@
-# Mobile Sensor Bridge for ROS2
+# Mobile Sensor Bridge for ROS2 v2.0 🚀
 
-This package provides a ROS2 node that streams sensor data directly from an Android smartphone, including JPEG camera streaming (up to 30 FPS), spatial pose tracking, and bidirectional audio communication.
+[![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)](https://github.com/VedantC2307/ros2-mobile-sensor-bridge)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![ROS2](https://img.shields.io/badge/ROS2-Humble-green.svg)](https://docs.ros.org/en/humble/)
+[![Node.js](https://img.shields.io/badge/Node.js-20+-green.svg)](https://nodejs.org/)
 
-**You can use this package in two ways:**  
-- **[As a ROS2 package](#installation)**
-- **[Using Docker](#docker-deployment)**
 
-## Overview
-Robotics prototypes often require multiple sensors, each needing calibration and integration. This package transforms an Android phone into a comprehensive sensor suite by publishing its sensor data as ROS2 topics. The node is implemented using rclnodejs, enabling seamless ROS2 integration within a JavaScript environment.
+Rapid ROS 2 prototyping bridge: drop any iOS/Android phone or tablet into your ros2 stack and instantly stream camera (JPEG), IMU, GPS, WebXR pose, speech transcription and text-to-speech over a secure HTTPS/WebSocket pipeline powered by rclnodejs—no native app install, just a browser, a YAML config, and one launch. Built for quick perception/audio experiments, field demos, and early integration work with configurable parameters, standardized message types, and a minimal surface for extension.
 
-<img src="resources/interface.jpeg" alt="Mobile Interface" width="290">
+## What’s New in 2.0
+- iOS support 
+- Added GPS (`/mobile_sensor/gps`)
+- Added IMU publisher (`/mobile_sensor/imu`)
+- Unified speech topic (`/mobile_sensor/speech`)
+- WAV + text TTS channels
+- Config-driven parameters (`config/config.yaml`)
+- Refactored server layout (`src/server/*`)
 
-## Features
+## Features:
+- Supports iOS and Android (iOS 13+, Android 8+)
+- JPEG camera streaming (configurable FPS/quality, front/back camera selection)
+- IMU (accelerometer + gyro)
+- GPS (longitude, latitude and altitude)
+- Optional WebXR pose 
+- Configurable Wake‑word microphone transcription → `/mobile_sensor/speech`
+- native Text‑to‑speech or .wav audio playback to device
+- YAML central configuration
+- Self‑signed HTTPS for permission unlock (camera/mic/motion)
 
-- **Camera Stream:** Publishes mobile camera frames as `sensor_msgs/CompressedImage`
-- **Native ROS2 Interface:** Direct integration with ROS2
-- **Spatial Pose Tracking:** Streams WebXR spatial position and orientation as `geometry_msgs/Pose`
-- **Speech Interface:** Bidirectional audio with speech-to-text and text-to-speech (wake word: "Robot")
-- **Selectable Sensors:** Enable or disable individual sensors as needed
+Publishes:
+- `/camera/image_raw/compressed` (`sensor_msgs/CompressedImage`)
+- `/camera/camera_info` (`sensor_msgs/CameraInfo`)
+- `/mobile_sensor/imu` (`sensor_msgs/Imu`)
+- `/mobile_sensor/gps` (`sensor_msgs/NavSatFix`)
+- `/mobile_sensor/pose` (`geometry_msgs/Pose`)
+- `/mobile_sensor/speech` (speech transcription, `std_msgs/String`)
+
+Subscribes:
+- `/mobile_sensor/tts` (`std_msgs/String`) – plain text TTS
+- `/mobile_sensor/tts_wav` (`std_msgs/UInt8MultiArray`) – raw WAV bytes
+- `/mobile_sensor/wav_bytes` (`std_msgs/UInt8MultiArray`) – legacy WAV topic
 
 ## Prerequisites
-- ROS2 (tested with Humble)
-- Node.js (v20+ recommended; tested with v22.14.0)
-- npm (v8+; tested with v10.9.2)
-- Modern smartphone with WebXR support (for AR features)
+
+### Requirements
+- ROS 2 Humble+
+- Node.js 20+
 - OpenSSL (for certificate generation)
+- Shared Wi‑Fi network between device and ROS host
 
-## Installation
+### Installation
+```bash
+cd <ros2_ws>/src
+git clone https://github.com/VedantC2307/ros2-mobile-sensor-bridge.git mobile_sensor
+cd mobile_sensor
+npm install            # install node dependencies BEFORE colcon build
+cd src
+chmod +x generate_ssl_cert.sh
+./generate_ssl_cert.sh # creates ssl/key.pem + cert.pem
+cd ~/<ros2_ws>         # back to workspace root
+colcon build --packages-select mobile_sensor
+source install/setup.bash
+```
 
-1. Clone the repository to your ROS2 workspace `src` directory:
-   ```bash
-   cd <ros2_workspace>/src/
-   git clone https://github.com/VedantC2307/ros2-android-sensor-bridge.git mobile_sensor
-   ```
+### Launch
+```bash
+ros2 launch mobile_sensor mobile_sensors.launch.py
+```
+Console prints the HTTPS URL (e.g. `https://<host_ip>:4000`).
 
-2. Install Node.js dependencies:
-   ```bash
-   cd mobile_sensor
-   npm install
-   ```
-   
-> [!NOTE]
-> Run `npm install` before building the package with colcon.
+### Connect Device
+1. Open the printed URL in mobile browser (allow self‑signed cert).
+2. Grant permissions: camera, microphone, location, motion sensors.
+3. Select sensors and start streaming.
 
-3. Generate SSL certificates (required for secure access):
-   ```bash
-   cd <ros2_workspace>/src/mobile_sensor/src
-   chmod +x generate_ssl_cert.sh
-   ./generate_ssl_cert.sh
-   ```
-   
-4. Build the ROS2 package:
-   ```bash
-   cd <ros2_workspace>
-   colcon build --packages-select mobile_sensor
-   ```
 
-5. Source the workspace:
-   ```bash
-   source install/setup.bash
-   ```
+## Usual Commands
+Publish TTS text:
+```bash
+ros2 topic pub -1 /mobile_sensor/tts std_msgs/msg/String "{data: 'Hello from ROS'}"
+```
+Play WAV (UInt8MultiArray of bytes): ensure proper WAV header.
 
-## Usage
+Monitor:
+```bash
+ros2 topic hz /camera/image_raw/compressed
+ros2 topic echo /mobile_sensor/imu
+ros2 topic echo /mobile_sensor/gps
+```
+View camera:
+```bash
+ros2 run rqt_image_view rqt_image_view
+```
 
-1. Launch the mobile sensor node:
-   ```bash
-   ros2 launch mobile_sensor mobile_sensors.launch.py
-   ```
+## 8. Topic Summary
+| Topic | Type | Direction | Notes |
+|-------|------|-----------|-------|
+| /camera/image_raw/compressed | sensor_msgs/CompressedImage | publish | JPEG frames |
+| /camera/camera_info | sensor_msgs/CameraInfo | publish | Basic intrinsics (identity defaults) |
+| /mobile_sensor/imu | sensor_msgs/Imu | publish | Accel + gyro; orientation = identity |
+| /mobile_sensor/gps | sensor_msgs/NavSatFix | publish | Covariance diagonal from accuracy |
+| /mobile_sensor/pose | geometry_msgs/Pose | publish | Provided if WebXR pose available |
+| /mobile_sensor/speech | std_msgs/String | publish | Wake‑word gated transcription |
+| /mobile_sensor/tts | std_msgs/String | subscribe | Text to device TTS |
+| /mobile_sensor/tts_wav | std_msgs/UInt8MultiArray | subscribe | WAV audio bytes |
+| /mobile_sensor/wav_bytes | std_msgs/UInt8MultiArray | subscribe | Legacy WAV channel |
 
-2. Access the web interface on your mobile device:
-   - Open a browser on your mobile device and navigate to `https://<your_computer_ip>:4000`
-   - Accept the self-signed certificate warning
-   - Grant permissions for camera, microphone, and AR features
-   - Select desired sensors and click "Start"
+## 9. Docker (Optional)
+```bash
+docker-compose build
+docker-compose up
+# or
+docker build -t mobile-sensor-bridge -f docker/Dockerfile .
+docker run -p 4000:4000 -p 3000:3000 mobile-sensor-bridge
+```
 
-## ROS2 Topics
-
-The package publishes the following topics:
-
-- `/camera/image_raw/compressed` (`sensor_msgs/CompressedImage`): Camera images
-- `/camera/camera_info` (`sensor_msgs/CameraInfo`): Camera calibration data [testing]
-- `/mobile_sensor/pose` (`geometry_msgs/Pose`): AR pose data
-- `/mobile_sensor/speech` (`std_msgs/String`): Transcribed speech
-
-To send text-to-speech messages to the device, publish to:
-
-- `/mobile_sensor/tts` (`std_msgs/String`): Text to be spoken
-
-## Docker Deployment
-
-For Docker deployment, see [Docker instructions](docker/README.md).
-
-1. Build and start the Docker container:
-   ```bash
-   docker-compose build
-   docker-compose up
-   ```
-
-2. Access the web interface on your mobile device as described in the Usage section.
-
-## Feature Status
-
-Current feature implementation status:
-- [x] **Camera Stream** – Stable; JPEG camera streaming
-- [ ] **Camera Selection Flexibility** – In development; Add support to use rear or front camera
-- [x] **ROS2 Topic Integration** – Stable; all core topics are fully supported
-- [x] **Device Pose Tracking** – Experimental; may show reduced accuracy in visually sparse environments
-- [ ] **Speech-to-Text Interface** – Experimental; works best in quiet settings. Wake word customization planned
-- [ ] **Text-to-Speech Interface** – Experimental; .wav file support planned for more natural voice output
-- [ ] **Multi-Device Support** – Beta; Use camera from one smartphone and audio/microphone from another
-- [ ] **Dependency Management** – Planned; add rosdep or similar for improved robustness
-
-> **Note:** Feature status is current as of April 2025. See GitHub issues for the latest updates.
-
-## Troubleshooting
+## 10. Troubleshooting
 
 ### Mobile Browser Shows ERR_EMPTY_RESPONSE
 
@@ -129,3 +131,13 @@ Let us know if these steps help or if you’re still having issues after trying 
 
 ## Contributing
 Contributions are welcome! Please feel free to submit a Pull Request.
+
+---
+
+<div align="center">
+
+**Made with ❤️ for the Robotics Community**
+
+[🌟 Star this repo](https://github.com/VedantC2307/ros2-mobile-sensor-bridge) • [🐛 Report Bug](https://github.com/VedantC2307/ros2-mobile-sensor-bridge/issues) • [💡 Request Feature](https://github.com/VedantC2307/ros2-mobile-sensor-bridge/issues/new)
+
+</div>

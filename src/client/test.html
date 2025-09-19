@@ -2,7 +2,7 @@
 <html style="background-color: black; color: white;">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <title>WebXR Pose Data</title>
@@ -22,17 +22,17 @@
 
       .container {
         background: rgba(30, 30, 30, 0.9);
-        padding: 2rem;
-        border-radius: 10px;
+        padding: 2.1rem;
+        border-radius: 12px;
         box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
-        max-width: 500px;
-        width: 90%;
+        max-width: 500px; /* Increased from 500px */
+        width: 95%; /* Increased from 90% */
       }
 
       .title {
         text-align: center;
         margin-bottom: 2rem;
-        font-size: 24px;
+        font-size: 28px; /* Increased from 24px */
       }
 
       .sensor-select {
@@ -149,7 +149,8 @@
         100% { opacity: 1; }
       }
     </style>
-    <script src="textToSpeech.js"></script>
+    <!-- Remove static script imports -->
+    <!-- Scripts will be loaded dynamically based on config -->
     <script src="camera.js"></script>
     <script src="audioManager.js"></script>
   </head>
@@ -161,7 +162,7 @@
       <div class="sensor-select">
         <label>
           <input type="checkbox" id="camera-select" checked>
-          Front Camera Stream
+          Camera Stream
           <div class="connection-status" id="camera-status"></div>
         </label>
         <label>
@@ -179,6 +180,10 @@
           Audio
           <div class="connection-status" id="tts-status"></div>
         </label>
+        <!-- Add this status indicator for WAV audio -->
+        <div id="wav-status" style="padding: 5px 10px; margin: 5px 0; font-size: 0.8em; color: #999;">
+          <!-- <span>WAV Audio: <span id="wav-status-text">Initializing...</span></span> -->
+        </div>
       </div>
       <button id="xr-button" disabled>XR not found</button>
     </div>
@@ -187,6 +192,47 @@
     <div id="transcription-log"></div>
 
     <script>
+      // Add a function to dynamically load audio script based on config
+      async function loadAudioScript() {
+        try {
+          const response = await fetch('/api/config');
+          const config = await response.json();
+          
+          console.log('Audio configuration loaded:', config.audio);
+          
+          // Determine which script to load based on audio mode
+          if (config.audio && config.audio.mode === 'tts') {
+            console.log('Loading TTS script...');
+            loadScript('textToSpeech.js');
+          } else {
+            // Default to WAV audio player
+            console.log('Loading WAV audio player script...');
+            loadScript('audioPlayer.js');
+          }
+          
+          return config.audio || { mode: 'wav', enabled: true };
+        } catch (error) {
+          console.error('Error loading audio configuration:', error);
+          // Default to WAV audio player
+          loadScript('audioPlayer.js');
+          return { mode: 'wav', enabled: true };
+        }
+      }
+      
+      // Helper function to dynamically load scripts
+      function loadScript(src) {
+        return new Promise((resolve, reject) => {
+          const script = document.createElement('script');
+          script.src = src;
+          script.onload = resolve;
+          script.onerror = reject;
+          document.head.appendChild(script);
+        });
+      }
+      
+      // Load the appropriate audio script before starting
+      document.addEventListener('DOMContentLoaded', loadAudioScript);
+      
       let xrSession = null;
       let xrRefSpace = null;
       const xrButton = document.getElementById('xr-button');
@@ -198,6 +244,8 @@
       const cameraManager = new CameraManager();
       const audioManager = new AudioManager();
       let audioWs = null;
+      let cameraInterval = null;  // Add missing cameraInterval variable
+      let cameraSendingActive = false;  // Add missing cameraSendingActive variable
 
       // Add sensor selection states
       let enabledSensors = {
@@ -286,9 +334,16 @@
         if (statusEl) {
           statusEl.className = `connection-status ${status}`;
         }
+        
+        // Log status changes to the console
+        if (status === 'disconnected') {
+          console.log(`${type.charAt(0).toUpperCase() + type.slice(1)} sensor disconnected`);
+        } else if (status === 'connected') {
+          console.log(`${type.charAt(0).toUpperCase() + type.slice(1)} sensor connected`);
+        }
       }
 
-      // Modify WebSocket connection handlers to update status indicators
+      // Modify connectWebSockets to store camera websocket globally
       function connectWebSockets() {
         if (!isSessionActive) return;
         
@@ -325,6 +380,9 @@
           updateConnectionStatus('camera', 'connecting');
           // Connect camera WebSocket
           cameraWs = new WebSocket(`${baseUrl}/camera`);
+          // Make cameraWs accessible globally for camera selection
+          window.cameraWs = cameraWs;
+          
           cameraWs.onopen = () => {
             console.log('Camera WebSocket connected');
             updateConnectionStatus('camera', 'connected');
@@ -338,6 +396,7 @@
           };
           cameraWs.onclose = () => {
             updateConnectionStatus('camera', 'disconnected');
+            window.cameraWs = null;
             if (isSessionActive) {
               console.log('Camera WebSocket closed, reconnecting...');
               setTimeout(() => {
@@ -447,10 +506,27 @@
           isSessionActive = true;
           xrButton.textContent = 'Stop';
           
-          // Initialize enabled sensors
+          // Initialize enabled sensors based on the current audio mode
           if (enabledSensors.tts) {
-            tts = new TextToSpeech();
-            await tts.connectWebSocket();
+            // Check for audio mode before initializing TTS
+            const response = await fetch('/api/config');
+            const config = await response.json();
+            const audioConfig = config.audio || { mode: 'wav', enabled: true };
+            
+            if (audioConfig.mode === 'tts' && window.TextToSpeech) {
+              tts = new TextToSpeech();
+              await tts.connectWebSocket();
+            } else if (audioConfig.mode === 'wav' && window.audioPlayer) {
+              // For WAV mode, initialize the audio player if available
+              console.log('Initializing WAV audio player');
+              if (typeof window.audioPlayer.connectWebSocket === 'function') {
+                window.audioPlayer.connectWebSocket();
+              }
+              // Set session active state in audio player
+              if (typeof window.audioPlayer.setSessionActive === 'function') {
+                window.audioPlayer.setSessionActive(true);
+              }
+            }
           }
           
           connectWebSockets();
@@ -494,6 +570,11 @@
           tts.disconnectWebSocket();
           tts = null;
         }
+        
+        // Set session inactive in audioPlayer
+        if (window.audioPlayer && typeof window.audioPlayer.setSessionActive === 'function') {
+          window.audioPlayer.setSessionActive(false);
+        }
 
         // Reset XR session
         if (xrSession) {
@@ -536,20 +617,40 @@
       }
 
       // Add TTS connection status update
-      document.getElementById('tts-select').addEventListener('change', (e) => {
+      document.getElementById('tts-select').addEventListener('change', async (e) => {
         enabledSensors.tts = e.target.checked;
-        if (!e.target.checked && tts) {
-          tts.disconnectWebSocket();
-          tts = null;
+        
+        // Get current audio configuration
+        const response = await fetch('/api/config');
+        const config = await response.json();
+        const audioConfig = config.audio || { mode: 'wav', enabled: true };
+        
+        if (!e.target.checked) {
+          // Disconnect appropriate audio system based on mode
+          if (tts && audioConfig.mode === 'tts') {
+            tts.disconnectWebSocket();
+            tts = null;
+          } else if (window.audioPlayer && audioConfig.mode === 'wav') {
+            window.audioPlayer.disconnectWebSocket();
+          }
           updateConnectionStatus('tts', 'disconnected');
         } else if (e.target.checked && isSessionActive) {
           updateConnectionStatus('tts', 'connecting');
-          tts = new TextToSpeech();
-          tts.connectWebSocket().then(() => {
-            updateConnectionStatus('tts', 'connected');
-          }).catch(() => {
-            updateConnectionStatus('tts', 'disconnected');
-          });
+          
+          // Connect to appropriate audio system based on mode
+          if (audioConfig.mode === 'tts' && window.TextToSpeech) {
+            tts = new TextToSpeech();
+            tts.connectWebSocket().then(() => {
+              updateConnectionStatus('tts', 'connected');
+            }).catch(() => {
+              updateConnectionStatus('tts', 'disconnected');
+            });
+          } else if (audioConfig.mode === 'wav' && window.audioPlayer) {
+            if (typeof window.audioPlayer.connectWebSocket === 'function') {
+              window.audioPlayer.connectWebSocket();
+              // The connection status will be updated by the audioPlayer
+            }
+          }
         }
       });
 

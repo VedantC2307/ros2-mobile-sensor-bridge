@@ -1,22 +1,28 @@
 {
   "name": "mobile_sensor",
-  "version": "0.0.0",
-  "description": "TODO: Package description",
-  "keywords": [],
-  "author": "",
-  "license": "TODO: License declaration",
+  "version": "2.0.0",
+  "description": "ROS2 package that transforms mobile devices into comprehensive sensor suites with camera streaming, IMU data, spatial tracking, and bidirectional audio communication",
+  "keywords": ["ros2", "mobile", "sensor", "camera", "imu", "webxr", "robotics"],
+  "author": "Vedant Choudhary <vedantchoudhary16@gmail.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/VedantC2307/ros2-android-sensor-bridge.git"
+  },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node src/server/index.js"
   },
   "bin": {
     "generate-ros-messages": "node_modules/.bin/generate-ros-messages"
   },
   "dependencies": {
-    "rclnodejs": "^0.32.4",
     "express": "^4.21.2",
     "fs": "^0.0.1-security",
     "https": "^1.0.0",
+    "js-yaml": "^4.1.0",
     "path": "^0.12.7",
+    "rclnodejs": "^0.32.4",
     "ws": "^8.18.1"
   }
 }

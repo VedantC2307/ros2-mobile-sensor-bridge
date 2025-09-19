@@ -3,6 +3,64 @@ class CameraManager {
         this.cameraStarted = false;
         this.videoTrack = null;
         this.lastCameraFrame = null;
+        this.cameraConfig = {
+            facingMode: "environment", // Default value until config is loaded
+            fps: 15, // Default FPS
+            quality: 0.7 // Default quality
+        };
+        
+        // Fetch camera configuration when created
+        this.fetchCameraConfig();
+    }
+    
+    // New method to fetch camera configuration from the server
+    async fetchCameraConfig() {
+        try {
+            const response = await fetch('/api/config');
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const config = await response.json();
+            if (config.camera) {
+                if (config.camera.facingMode) {
+                    this.cameraConfig.facingMode = config.camera.facingMode;
+                    console.log('Using camera facing mode from config:', this.cameraConfig.facingMode);
+                }
+                if (config.camera.fps) {
+                    this.cameraConfig.fps = config.camera.fps;
+                    console.log('Using camera FPS from config:', this.cameraConfig.fps);
+                }
+                if (config.camera.quality) {
+                    this.cameraConfig.quality = config.camera.quality;
+                    console.log('Using camera quality from config:', this.cameraConfig.quality);
+                }
+            }
+        } catch (error) {
+            console.error('Failed to load camera config:', error);
+            // Keep using the defaults
+        }
+    }
+
+    // Add toggle camera method to switch between front and back cameras
+    async toggleCamera() {
+        // If camera is running, stop it first
+        if (this.cameraStarted && this.videoTrack) {
+            this.videoTrack.stop();
+            this.videoTrack = null;
+        }
+        
+        // Toggle the facing mode
+        this.cameraConfig.facingMode = 
+            this.cameraConfig.facingMode === "environment" ? "user" : "environment";
+        
+        console.log(`Camera toggled to: ${this.cameraConfig.facingMode}`);
+        
+        // Restart the camera with new facing mode if it was running
+        if (this.cameraStarted && window.cameraWs) {
+            // Get the session active state from window object, not global
+            const isActive = window.isSessionActive !== undefined ? window.isSessionActive : true;
+            await this.startCamera(window.cameraWs, isActive);
+        }
     }
 
     async startCamera(ws, isSessionActive) {
@@ -12,8 +70,13 @@ class CameraManager {
                 throw new Error('getUserMedia API not supported');
             }
 
+            // Check if 3D Position is enabled and override to user facing if it is
+            const poseEnabled = document.getElementById('pose-select').checked;
+            const facingMode = poseEnabled ? "user" : this.cameraConfig.facingMode;
+            console.log(`Starting camera with facing mode: ${facingMode} (pose enabled: ${poseEnabled})`);
+
             const stream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: "user" },
+                video: { facingMode: facingMode },
             });
             this.videoTrack = stream.getVideoTracks()[0];
 
@@ -25,8 +88,9 @@ class CameraManager {
             const ctx = canvas.getContext('2d');
 
             let lastSentTime = 0;
-            const desiredFps = 30;
+            const desiredFps = this.cameraConfig.fps; // Use FPS from config
             const frameInterval = 1000 / desiredFps;
+            const imageQuality = this.cameraConfig.quality; // Capture quality from config
 
             async function processFrame(videoFrame) {
                 const bitmap = await createImageBitmap(videoFrame);
@@ -43,7 +107,7 @@ class CameraManager {
                 // Convert to JPEG blob
                 const blob = await canvas.convertToBlob({
                     type: 'image/jpeg',
-                    quality: 0.7
+                    quality: imageQuality // Use quality from config
                 });
                 
                 // Convert blob to base64

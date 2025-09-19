@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html style="background-color: #121212; color: white;">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>ROS2 Mobile Sensor Hub</title>
+    <!-- External stylesheets -->
+    <link rel="stylesheet" href="style.css">
+    <style>
+      /* Debug console styles */
+      #debug-console {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        max-height: 30vh;
+        overflow-y: auto;
+        background-color: rgba(0, 0, 0, 0.8);
+        color: #00ff00;
+        font-family: monospace;
+        font-size: 12px;
+        padding: 10px;
+        z-index: 9999;
+        border-top: 1px solid #444;
+        display: none; /* Hidden by default, toggle with button */
+      }
+      .debug-entry {
+        margin-bottom: 5px;
+        border-bottom: 1px solid #333;
+        padding-bottom: 3px;
+      }
+      .debug-entry.error {
+        color: #ff5555;
+      }
+      .debug-entry.warn {
+        color: #ffff55;
+      }
+      .debug-entry.info {
+        color: #55ffff;
+      }
+      #debug-toggle {
+        position: fixed;
+        bottom: 10px;
+        right: 10px;
+        background-color: rgba(0, 0, 0, 0.5);
+        color: white;
+        border: 1px solid #666;
+        border-radius: 5px;
+        padding: 5px 10px;
+        z-index: 10000;
+        font-size: 12px;
+      }
+      #debug-clear {
+        background-color: #333;
+        color: white;
+        border: 1px solid #666;
+        border-radius: 3px;
+        margin-left: 5px;
+        padding: 2px 5px;
+        font-size: 10px;
+      }
+    </style>
+    <!-- Device detection script - removed dynamic script loading -->
+    <script>
+      // Load the appropriate camera manager based on device type
+      document.addEventListener('DOMContentLoaded', function() {
+        // Properly detect iOS devices
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+        
+        if (isIOS) {
+          console.log('iOS device detected, using iOS camera manager');
+          // Load the iOS camera manager script
+          const script = document.createElement('script');
+          script.src = 'iosCameraManager.js';
+          script.onload = function() {
+            if (window.IOSCameraManager) {
+              window.cameraManager = new window.IOSCameraManager();
+              console.log('iOS camera manager initialized');
+            } else {
+              console.error('Failed to load iOS camera manager');
+            }
+          };
+          script.onerror = function() {
+            console.error('Failed to load iOS camera manager script');
+            // Fallback to standard camera manager
+            if (window.CameraManager) {
+              window.cameraManager = new window.CameraManager();
+              console.log('Fallback: standard camera manager initialized');
+            }
+          };
+          document.head.appendChild(script);
+        } else {
+          console.log('Non-iOS device detected, using standard camera manager');
+          // Initialize standard camera manager
+          if (window.CameraManager) {
+            window.cameraManager = new window.CameraManager();
+            console.log('Standard camera manager initialized');
+          }
+        }
+      });
+    </script>
+    <!-- Load utility scripts -->
+    <script src="camera.js"></script>
+    <script src="iosCameraManager.js"></script>
+    <script src="speechRecognition.js"></script>
+    <script src="audioPlayer.js"></script>
+    <script src="textToSpeech.js"></script>
+    <script src="imuSensor.js"></script>
+    <script src="gpsSensor.js"></script>
+    <!-- Load sensor scripts before main.js to ensure they're available -->
+  </head>
+  <body>
+    <div id="overlay"></div>
+    
+    <div class="container">
+      <div class="title">Sensor Interface</div>
+      
+      <div class="sensor-section">
+        <div class="section-title">Input Sensors</div>
+        <div class="sensor-select">
+          <label>
+            <div class="sensor-checkbox-container">
+              <input type="checkbox" id="camera-select" checked>
+              <span class="sensor-name">Camera Stream</span>
+            </div>
+            <div class="connection-status" id="camera-status"></div>
+          </label>
+          
+          <label>
+            <div class="sensor-checkbox-container">
+              <input type="checkbox" id="pose-select">
+              <span class="sensor-name">3D Position</span>
+            </div>
+            <div class="connection-status" id="pose-status"></div>
+          </label>
+          
+          <label>
+            <div class="sensor-checkbox-container">
+              <input type="checkbox" id="microphone-select" checked>
+              <span class="sensor-name">Microphone</span>
+            </div>
+            <div class="connection-status" id="microphone-status"></div>
+          </label>
+          
+          <label>
+            <div class="sensor-checkbox-container">
+              <input type="checkbox" id="imu-select" checked>
+              <span class="sensor-name">IMU Sensor</span>
+            </div>
+            <div class="connection-status" id="imu-status"></div>
+          </label>
+          
+          <label>
+            <div class="sensor-checkbox-container">
+              <input type="checkbox" id="gps-select" checked>
+              <span class="sensor-name">GPS Sensor</span>
+            </div>
+            <div class="connection-status" id="gps-status"></div>
+          </label>
+        </div>
+      </div>
+      
+      <div class="sensor-section">
+        <div class="section-title">Output</div>
+        <div class="sensor-select">
+          <label>
+            <div class="sensor-checkbox-container">
+              <input type="checkbox" id="audio-select" checked>
+              <span class="sensor-name">Audio</span>
+            </div>
+            <div class="connection-status" id="audio-status"></div>
+          </label>
+        </div>
+      </div>
+      
+      <button id="xr-button" disabled>XR not found</button>
+    </div>
+
+    <div id="pose">Pose data will appear here.</div>
+    <div id="transcription-log"></div>
+    
+    <!-- Debug console -->
+    <div id="debug-console"></div>
+    <button id="debug-toggle">Show Debug Console</button>
+
+    <!-- Load main application script last -->
+    <script src="main.js"></script>
+    
+    <!-- Debug console script -->
+    <script>
+      (function() {
+        // Create debug console
+        const debugConsole = document.getElementById('debug-console');
+        const debugToggle = document.getElementById('debug-toggle');
+        let consoleVisible = false;
+        
+        // Create clear button for console
+        const clearBtn = document.createElement('button');
+        clearBtn.id = 'debug-clear';
+        clearBtn.textContent = 'Clear';
+        clearBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          debugConsole.innerHTML = '';
+        });
+        debugToggle.appendChild(clearBtn);
+        
+        // Check config to see if debug console should be enabled
+        fetch('/api/config')
+          .then(response => {
+            if (!response.ok) {
+              throw new Error(`Config fetch failed with status: ${response.status}`);
+            }
+            return response.json();
+          })
+          .then(config => {
+            // Check both formats of the property name for compatibility
+            const debugEnabled = config['mobile-debug-console'] === true || 
+                                (config.debug && config.debug['mobile-debug-console'] === true);
+            
+            console.log('Debug config loaded:', debugEnabled);
+            
+            // Hide both console and toggle button if disabled in config
+            if (!debugEnabled) {
+              debugConsole.style.display = 'none';
+              debugToggle.style.display = 'none';
+              console.log('Debug console disabled based on configuration');
+              return;
+            }
+            
+            // Show toggle button if enabled
+            debugToggle.style.display = 'block';
+            
+            // Toggle console visibility
+            debugToggle.addEventListener('click', () => {
+              consoleVisible = !consoleVisible;
+              debugConsole.style.display = consoleVisible ? 'block' : 'none';
+              debugToggle.textContent = consoleVisible ? 'Hide Debug Console' : 'Show Debug Console';
+              if (clearBtn) debugToggle.appendChild(clearBtn);
+            });
+            
+            console.log('Debug console enabled based on configuration');
+          })
+          .catch(err => {
+            console.error('Failed to load debug console configuration:', err);
+            // Hide by default if we can't fetch config
+            debugConsole.style.display = 'none';
+            debugToggle.style.display = 'none';
+          });
+        
+        // Capture console messages
+        const originalConsole = {
+          log: console.log,
+          error: console.error,
+          warn: console.warn,
+          info: console.info
+        };
+        
+        // Add timestamp to log entries
+        function getTimestamp() {
+          const now = new Date();
+          return now.toLocaleTimeString() + '.' + now.getMilliseconds().toString().padStart(3, '0');
+        }
+        
+        // Log to both original console and our debug console
+        console.log = function() {
+          const entry = document.createElement('div');
+          entry.className = 'debug-entry';
+          entry.textContent = `[${getTimestamp()}] LOG: ${Array.from(arguments).join(' ')}`;
+          debugConsole.appendChild(entry);
+          debugConsole.scrollTop = debugConsole.scrollHeight;
+          originalConsole.log.apply(console, arguments);
+        };
+        
+        console.error = function() {
+          const entry = document.createElement('div');
+          entry.className = 'debug-entry error';
+          entry.textContent = `[${getTimestamp()}] ERROR: ${Array.from(arguments).join(' ')}`;
+          debugConsole.appendChild(entry);
+          debugConsole.scrollTop = debugConsole.scrollHeight;
+          originalConsole.error.apply(console, arguments);
+        };
+        
+        console.warn = function() {
+          const entry = document.createElement('div');
+          entry.className = 'debug-entry warn';
+          entry.textContent = `[${getTimestamp()}] WARN: ${Array.from(arguments).join(' ')}`;
+          debugConsole.appendChild(entry);
+          debugConsole.scrollTop = debugConsole.scrollHeight;
+          originalConsole.warn.apply(console, arguments);
+        };
+        
+        console.info = function() {
+          const entry = document.createElement('div');
+          entry.className = 'debug-entry info';
+          entry.textContent = `[${getTimestamp()}] INFO: ${Array.from(arguments).join(' ')}`;
+          debugConsole.appendChild(entry);
+          debugConsole.scrollTop = debugConsole.scrollHeight;
+          originalConsole.info.apply(console, arguments);
+        };
+        
+        // Capture global errors
+        window.addEventListener('error', function(event) {
+          const entry = document.createElement('div');
+          entry.className = 'debug-entry error';
+          entry.textContent = `[${getTimestamp()}] UNCAUGHT ERROR: ${event.message} at ${event.filename}:${event.lineno}:${event.colno}`;
+          debugConsole.appendChild(entry);
+          debugConsole.scrollTop = debugConsole.scrollHeight;
+        });
+        
+        // Capture promise rejections
+        window.addEventListener('unhandledrejection', function(event) {
+          const entry = document.createElement('div');
+          entry.className = 'debug-entry error';
+          entry.textContent = `[${getTimestamp()}] UNHANDLED PROMISE REJECTION: ${event.reason}`;
+          debugConsole.appendChild(entry);
+          debugConsole.scrollTop = debugConsole.scrollHeight;
+        });
+        
+        // Log init message
+        console.log('Debug console initialized');
+        
+        // Expose diagnostic functions to window
+        window.debugAudio = function() {
+          console.log('------ AUDIO DIAGNOSTICS ------');
+          if (window.audioPlayer) {
+            console.log('audioPlayer exists:', !!window.audioPlayer);
+            console.log('audioUnlocked:', window.audioPlayer.isAudioUnlocked());
+            console.log('hasAudioElements:', window.audioPlayer.hasAudioElements());
+            console.log('Queue length:', window.audioPlayer.getQueueLength());
+            console.log('Audio config:', JSON.stringify(window.audioPlayer.getAudioConfig()));
+          } else {
+            console.error('audioPlayer not initialized');
+          }
+          
+          if (window.tts) {
+            console.log('TTS exists:', !!window.tts);
+            console.log('TTS isReady:', window.tts.isReady);
+            console.log('TTS audioUnlocked:', window.tts.audioUnlocked);
+          } else {
+            console.error('TTS not initialized');
+          }
+          
+          // Check audio elements
+          const audioElements = document.querySelectorAll('audio');
+          console.log('Audio elements on page:', audioElements.length);
+          audioElements.forEach((audio, i) => {
+            console.log(`Audio #${i}:`, {
+              id: audio.id,
+              src: audio.src ? 'set' : 'empty',
+              paused: audio.paused,
+              ended: audio.ended,
+              currentTime: audio.currentTime,
+              readyState: audio.readyState,
+              error: audio.error
+            });
+          });
+          console.log('------ END DIAGNOSTICS ------');
+        };
+      })();
+    </script>
+  </body>
+</html>
