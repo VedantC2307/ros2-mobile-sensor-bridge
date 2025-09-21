@@ -42,7 +42,7 @@ RUN cd /ros2_ws/src/mobile_sensor/src && \
       ./generate_ssl_cert.sh; \
     else \
       mkdir -p ssl && \
-      openssl req -x509 -newkey rsa:4096 -keyout ssl/server.key -out ssl/server.crt -days 365 -nodes -subj "/CN=localhost"; \
+      openssl req -x509 -newkey rsa:4096 -keyout ssl/key.pem -out ssl/cert.pem -days 365 -nodes -subj "/CN=localhost"; \
     fi
 
 # Build the package - explicitly using bash for the source command

@@ -1,5 +1,5 @@
 camera:
-  quality: 0.9                  # Quality of the image (0.0 - 0.9)
+  quality: 0.8                  # Quality of the image (0.0 - 0.9)
   fps: 30                       # Max 30 FPS
   facingMode: "environment"     # Options: "environment" (back camera) or "user" (front camera)
 
@@ -8,8 +8,8 @@ imu:
                                 # Higher rates provide smoother data but use more bandwidth 
 
 audio:
-  mode: "wav"                   # Options: "wav", "mp3" or "tts"
-  enabled: true                  # REQUIRED: enable WAV playback (was missing -> client skipped connection)
+  mode: "tts"                   # Options: "wav", "mp3" or "tts"
+  enabled: true                 # Enable or disable audio streaming
   tts:
     rate: 1.0                   # Speech rate: 0.1 (slow) to 10.0 (fast)
     pitch: 1.0                  # Speech pitch: 0.0 (low) to 2.0 (high)
@@ -23,4 +23,4 @@ microphone:
 debug:
   color_logging: false # Set to true to enable color logging
   debug_logging: false # Set to true to enable debug logs
-  mobile-debug-console: true # Set to true to enable the mobile debug console
+  mobile-debug-console: false # Set to true to enable the mobile debug console

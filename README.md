@@ -15,7 +15,7 @@ Rapid ROS 2 prototyping bridge: drop any iOS/Android phone or tablet into your 
 - Unified speech topic (`/mobile_sensor/speech`)
 - WAV + text TTS channels
 - Config-driven parameters (`config/config.yaml`)
-- Refactored server layout (`src/server/*`)
+- Refactored code structure for easy development
 
 ## Features:
 - Supports iOS and Android (iOS 13+, Android 8+)
@@ -24,27 +24,23 @@ Rapid ROS 2 prototyping bridge: drop any iOS/Android phone or tablet into your 
 - GPS (longitude, latitude and altitude)
 - Optional WebXR pose 
 - Configurable Wake‑word microphone transcription → `/mobile_sensor/speech`
-- native Text‑to‑speech or .wav audio playback to device
+- native Text‑to‑speech or .wav audio playback to device 
 - YAML central configuration
-- Self‑signed HTTPS for permission unlock (camera/mic/motion)
 
 Publishes:
 - `/camera/image_raw/compressed` (`sensor_msgs/CompressedImage`)
-- `/camera/camera_info` (`sensor_msgs/CameraInfo`)
 - `/mobile_sensor/imu` (`sensor_msgs/Imu`)
 - `/mobile_sensor/gps` (`sensor_msgs/NavSatFix`)
 - `/mobile_sensor/pose` (`geometry_msgs/Pose`)
-- `/mobile_sensor/speech` (speech transcription, `std_msgs/String`)
+- `/mobile_sensor/speech` (`std_msgs/String`)
 
 Subscribes:
 - `/mobile_sensor/tts` (`std_msgs/String`) – plain text TTS
-- `/mobile_sensor/tts_wav` (`std_msgs/UInt8MultiArray`) – raw WAV bytes
-- `/mobile_sensor/wav_bytes` (`std_msgs/UInt8MultiArray`) – legacy WAV topic
 
 ## Prerequisites
 
 ### Requirements
-- ROS 2 Humble+
+- ROS 2 Humble [Tested]
 - Node.js 20+
 - OpenSSL (for certificate generation)
 - Shared Wi‑Fi network between device and ROS host
@@ -93,7 +89,7 @@ View camera:
 ros2 run rqt_image_view rqt_image_view
 ```
 
-## 8. Topic Summary
+<!-- ## 8. Topic Summary
 | Topic | Type | Direction | Notes |
 |-------|------|-----------|-------|
 | /camera/image_raw/compressed | sensor_msgs/CompressedImage | publish | JPEG frames |
@@ -104,9 +100,9 @@ ros2 run rqt_image_view rqt_image_view
 | /mobile_sensor/speech | std_msgs/String | publish | Wake‑word gated transcription |
 | /mobile_sensor/tts | std_msgs/String | subscribe | Text to device TTS |
 | /mobile_sensor/tts_wav | std_msgs/UInt8MultiArray | subscribe | WAV audio bytes |
-| /mobile_sensor/wav_bytes | std_msgs/UInt8MultiArray | subscribe | Legacy WAV channel |
+| /mobile_sensor/wav_bytes | std_msgs/UInt8MultiArray | subscribe | Legacy WAV channel | -->
 
-## 9. Docker (Optional)
+## Docker (Optional)
 ```bash
 docker-compose build
 docker-compose up
@@ -115,7 +111,7 @@ docker build -t mobile-sensor-bridge -f docker/Dockerfile .
 docker run -p 4000:4000 -p 3000:3000 mobile-sensor-bridge
 ```
 
-## 10. Troubleshooting
+## Troubleshooting
 
 ### Mobile Browser Shows ERR_EMPTY_RESPONSE
 
