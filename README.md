@@ -15,7 +15,7 @@ Rapid ROS 2 prototyping bridge: drop any iOS/Android phone or tablet into your 
 - Unified speech topic (`/mobile_sensor/speech`)
 - WAV + text TTS channels
 - Config-driven parameters (`config/config.yaml`)
-- Refactored code structure for easy development
+- Reorganized project layout for easier customization and extension
 
 ## Features:
 - Supports iOS and Android (iOS 13+, Android 8+)
@@ -76,7 +76,6 @@ Publish TTS text:
 ```bash
 ros2 topic pub -1 /mobile_sensor/tts std_msgs/msg/String "{data: 'Hello from ROS'}"
 ```
-Play WAV (UInt8MultiArray of bytes): ensure proper WAV header.
 
 Monitor:
 ```bash
@@ -102,14 +101,14 @@ ros2 run rqt_image_view rqt_image_view
 | /mobile_sensor/tts_wav | std_msgs/UInt8MultiArray | subscribe | WAV audio bytes |
 | /mobile_sensor/wav_bytes | std_msgs/UInt8MultiArray | subscribe | Legacy WAV channel | -->
 
-## Docker (Optional)
+<!-- ## Docker (Optional)
 ```bash
 docker-compose build
 docker-compose up
 # or
 docker build -t mobile-sensor-bridge -f docker/Dockerfile .
 docker run -p 4000:4000 -p 3000:3000 mobile-sensor-bridge
-```
+``` -->
 
 ## Troubleshooting
 
