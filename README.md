@@ -50,11 +50,13 @@ Subscribes:
 cd <ros2_ws>/src
 git clone https://github.com/VedantC2307/ros2-mobile-sensor-bridge.git mobile_sensor
 cd mobile_sensor
-npm install            # install node dependencies BEFORE colcon build
+export ROS_DISTRO=humble # ensure ROS environment is detected by rclnodejs
+npm install              # install node dependencies BEFORE colcon build
 cd src
 chmod +x generate_ssl_cert.sh
-./generate_ssl_cert.sh # creates ssl/key.pem + cert.pem
-cd ~/<ros2_ws>         # back to workspace root
+mkdir -p ssl            # create ssl directory if it doesn't exist
+./generate_ssl_cert.sh  # create ssl/key.pem + cert.pem
+cd ~/<ros2_ws>          # back to workspace root
 colcon build --packages-select mobile_sensor
 source install/setup.bash
 ```
