@@ -12,6 +12,7 @@ window.isSessionActive = isSessionActive;
 let microphoneWs = null;
 let imuWs = null;  // Separate WebSocket for iOS IMU data
 let gpsWs = null;  // Separate WebSocket for GPS data
+let magnetometerWs = null;  // Separate WebSocket for magnetometer data
 let cameraInterval = null;
 let cameraSendingActive = false;
 
@@ -22,7 +23,8 @@ let enabledSensors = {
   microphone: true,
   audio: true,
   imu: true,  // Added for iOS IMU sensor data
-  gps: true   // Added for GPS location data
+  gps: true,  // Added for GPS location data
+  magnetometer: true  // Added for magnetometer data
 };
 
 // Shared audio context for iOS to ensure microphone and audio playback work together
@@ -198,6 +200,28 @@ function initializeUI() {
     }
   });
 
+  // Add Magnetometer sensor checkbox listener
+  document.getElementById('magnetometer-select').addEventListener('change', (e) => {
+    enabledSensors.magnetometer = e.target.checked;
+
+    if (e.target.checked && isSessionActive) {
+      if (magnetometerWs && magnetometerWs.readyState === WebSocket.OPEN) {
+        console.log('Magnetometer WebSocket already connected');
+      } else {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const baseUrl = `${protocol}//${window.location.host}`;
+        connectMagnetometerWebSocket(baseUrl);
+      }
+    } else if (!e.target.checked && magnetometerWs) {
+      console.log('Stopping magnetometer sensor');
+      magnetometerWs.close();
+      updateConnectionStatus('magnetometer', 'disconnected');
+      if (window.magnetometerSensorManager && typeof window.magnetometerSensorManager.stopMagnetometerSensor === 'function') {
+        window.magnetometerSensorManager.stopMagnetometerSensor();
+      }
+    }
+  });
+
   // Add Audio checkbox listener - this refers to output audio
   document.getElementById('audio-select').addEventListener('change', async (e) => {
     enabledSensors.audio = e.target.checked;
@@ -287,6 +311,30 @@ function initializeUI() {
         }
       }
       
+      // Handle iOS magnetometer permission request immediately on user interaction
+      if (enabledSensors.magnetometer && /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream) {
+        try {
+          if (!window.magnetometerSensorManager) {
+            window.magnetometerSensorManager = new MagnetometerSensorManager();
+          }
+          console.log('Requesting magnetometer permission during user interaction...');
+          const permissionGranted = await window.magnetometerSensorManager.requestPermission();
+          if (!permissionGranted) {
+            console.warn('Magnetometer permission denied by user');
+            enabledSensors.magnetometer = false;
+            const cb = document.getElementById('magnetometer-select');
+            if (cb) cb.checked = false;
+          } else {
+            console.log('Magnetometer permission granted during user interaction');
+          }
+        } catch (error) {
+          console.error('Error requesting magnetometer permission:', error);
+          enabledSensors.magnetometer = false;
+          const cb = document.getElementById('magnetometer-select');
+          if (cb) cb.checked = false;
+        }
+      }
+
       startSession();
     } else {
       if (xrSession) {
@@ -515,6 +563,11 @@ function connectWebSockets() {
   if (enabledSensors.gps) {
     connectGPSWebSocket(baseUrl);
   }
+
+  // Connect magnetometer sensor
+  if (enabledSensors.magnetometer) {
+    connectMagnetometerWebSocket(baseUrl);
+  }
 }
 
 // Function to connect pose WebSocket
@@ -735,6 +788,60 @@ function connectGPSWebSocket(baseUrl) {
   };
 }
 
+// Function to connect magnetometer WebSocket
+function connectMagnetometerWebSocket(baseUrl) {
+  updateConnectionStatus('magnetometer', 'connecting');
+
+  if (!window.magnetometerSensorManager) {
+    window.magnetometerSensorManager = new MagnetometerSensorManager();
+  }
+
+  magnetometerWs = new WebSocket(`${baseUrl}/magnetometer`);
+  magnetometerWs.onopen = () => {
+    console.log('Magnetometer WebSocket connected');
+    updateConnectionStatus('magnetometer', 'connected');
+
+    window.magnetometerSensorManager.startMagnetometerSensorWithoutPermission(magnetometerWs, isSessionActive).then(success => {
+      if (!success) {
+        console.log('Magnetometer startup without permission failed, trying with permission request');
+        window.magnetometerSensorManager.startMagnetometerSensor(magnetometerWs, isSessionActive).then(fallbackSuccess => {
+          if (!fallbackSuccess) {
+            console.error('Failed to start magnetometer sensor');
+            updateConnectionStatus('magnetometer', 'disconnected');
+            enabledSensors.magnetometer = false;
+            const cb = document.getElementById('magnetometer-select');
+            if (cb) cb.checked = false;
+          }
+        });
+      } else {
+        console.log('Magnetometer sensor started successfully');
+      }
+    }).catch(error => {
+      console.error('Error starting magnetometer sensor:', error);
+      updateConnectionStatus('magnetometer', 'disconnected');
+    });
+  };
+
+  magnetometerWs.onerror = (error) => {
+    console.error('Magnetometer WebSocket error:', error);
+    updateConnectionStatus('magnetometer', 'disconnected');
+  };
+
+  magnetometerWs.onclose = () => {
+    updateConnectionStatus('magnetometer', 'disconnected');
+    if (window.magnetometerSensorManager) {
+      window.magnetometerSensorManager.stopMagnetometerSensor();
+    }
+    if (isSessionActive) {
+      setTimeout(() => {
+        if (enabledSensors.magnetometer && isSessionActive) {
+          connectMagnetometerWebSocket(baseUrl);
+        }
+      }, 1000);
+    }
+  };
+}
+
 // Function to start camera frame sending
 function startCameraSending() {
   // This is now handled directly by the camera manager
@@ -860,7 +967,7 @@ function onSessionEnded() {
   }
   
   // Reset all connection statuses
-  ['pose', 'camera', 'microphone', 'audio', 'imu', 'gps'].forEach(type => {
+  ['pose', 'camera', 'microphone', 'audio', 'imu', 'gps', 'magnetometer'].forEach(type => {
     updateConnectionStatus(type, '');
   });
   
@@ -870,16 +977,21 @@ function onSessionEnded() {
   document.body.classList.remove('session-active');
   
   // Clean up WebSockets
-  [poseWs, cameraWs, microphoneWs, imuWs, gpsWs].forEach(ws => {
+  [poseWs, cameraWs, microphoneWs, imuWs, gpsWs, magnetometerWs].forEach(ws => {
     if (ws) {
       ws.close();
     }
   });
-  poseWs = cameraWs = microphoneWs = imuWs = gpsWs = null;
-  
+  poseWs = cameraWs = microphoneWs = imuWs = gpsWs = magnetometerWs = null;
+
   // Clean up IMU sensor if active
   if (window.imuSensorManager && typeof window.imuSensorManager.stopIMUSensor === 'function') {
     window.imuSensorManager.stopIMUSensor();
+  }
+
+  // Clean up magnetometer sensor if active
+  if (window.magnetometerSensorManager && typeof window.magnetometerSensorManager.stopMagnetometerSensor === 'function') {
+    window.magnetometerSensorManager.stopMagnetometerSensor();
   }
 
   // Clean up managers with proper null checks

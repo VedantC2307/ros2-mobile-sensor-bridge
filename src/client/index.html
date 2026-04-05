@@ -110,6 +110,7 @@
     <script src="textToSpeech.js"></script>
     <script src="imuSensor.js"></script>
     <script src="gpsSensor.js"></script>
+    <script src="magnetometerSensor.js"></script>
     <!-- Load sensor scripts before main.js to ensure they're available -->
   </head>
   <body>
@@ -159,6 +160,14 @@
               <span class="sensor-name">GPS Sensor</span>
             </div>
             <div class="connection-status" id="gps-status"></div>
+          </label>
+
+          <label>
+            <div class="sensor-checkbox-container">
+              <input type="checkbox" id="magnetometer-select" checked>
+              <span class="sensor-name">Magnetometer</span>
+            </div>
+            <div class="connection-status" id="magnetometer-status"></div>
           </label>
         </div>
       </div>
