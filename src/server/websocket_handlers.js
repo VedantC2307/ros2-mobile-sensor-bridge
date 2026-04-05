@@ -14,7 +14,8 @@ let servers = {
   microphone: null, // Changed from audio to microphone for clarity
   wavAudio: null,
   imu: null, // Added for iOS IMU sensor data
-  gps: null  // Added for GPS location data
+  gps: null,  // Added for GPS location data
+  magnetometer: null // Added for magnetometer data
 };
 
 // Track TTS clients
@@ -30,6 +31,7 @@ function initWebSockets(server) {
   servers.wavAudio = new WebSocket.Server({ noServer: true });
   servers.imu = new WebSocket.Server({ noServer: true }); // Added for iOS and Android IMU sensor data
   servers.gps = new WebSocket.Server({ noServer: true }); // Added for GPS location data
+  servers.magnetometer = new WebSocket.Server({ noServer: true }); // Added for magnetometer data
   
   // Set up WebSocket route handlers
   server.on('upgrade', (request, socket, head) => {
@@ -61,6 +63,11 @@ function initWebSockets(server) {
           servers.gps.emit('connection', ws, request);
         });
         break;
+      case '/magnetometer':
+        servers.magnetometer.handleUpgrade(request, socket, head, (ws) => {
+          servers.magnetometer.emit('connection', ws, request);
+        });
+        break;
       case '/microphone': // Changed from /audio to /microphone
         servers.microphone.handleUpgrade(request, socket, head, (ws) => {
           servers.microphone.emit('connection', ws, request);
@@ -84,6 +91,7 @@ function initWebSockets(server) {
   setupWavAudioHandlers();
   setupIMUHandlers(); // Added for iOS and Android IMU sensor data
   setupGPSHandlers(); // Added for GPS location data
+  setupMagnetometerHandlers(); // Added for magnetometer data
   
   return servers;
 }
@@ -321,6 +329,36 @@ function setupGPSHandlers() {
     
     ws.on('close', () => {
       Logger.info('APP', 'GPS sensor deactivated');
+    });
+  });
+}
+
+// Set up magnetometer data WebSocket handlers
+function setupMagnetometerHandlers() {
+  servers.magnetometer.on('connection', (ws) => {
+    Logger.info('APP', 'Magnetometer sensor activated');
+
+    ws.on('message', async (message) => {
+      try {
+        const data = JSON.parse(message);
+        if (data.magnetometer) {
+          const mag = data.magnetometer;
+          Logger.debug('MAG', `Magnetic field: x=${mag.x.toFixed(6)}, y=${mag.y.toFixed(6)}, z=${mag.z.toFixed(6)} (source: ${mag.source})`);
+
+          const stamp = {
+            sec: Math.floor(mag.timestamp ? mag.timestamp / 1000 : Date.now() / 1000),
+            nanosec: (mag.timestamp ? mag.timestamp % 1000 : Date.now() % 1000) * 1000000
+          };
+
+          rosInterface.publishMagnetometerData(mag, stamp);
+        }
+      } catch (err) {
+        Logger.error('ROS', `Error processing magnetometer message: ${err}`);
+      }
+    });
+
+    ws.on('close', () => {
+      Logger.info('APP', 'Magnetometer sensor deactivated');
     });
   });
 }

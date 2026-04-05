@@ -13,7 +13,8 @@ let publishers = {
     pose: null,
     microphone: null, // Changed from audio to microphone
     imu: null, // Added IMU publisher
-    gps: null  // Added GPS publisher
+    gps: null,  // Added GPS publisher
+    magnetometer: null // Added magnetometer publisher
 };
 
 // Store node reference
@@ -67,7 +68,14 @@ async function initRos(wssTTS, wssWavAudio) {
     'mobile_sensor/gps',
     { qos: { depth: 10 } }
   );
-  
+
+  // Add magnetometer publisher for magnetic field data
+  publishers.magnetometer = node.createPublisher(
+    'sensor_msgs/msg/MagneticField',
+    'mobile_sensor/magnetometer',
+    { qos: { depth: 10 } }
+  );
+
   // Add string subscriber for TTS
   node.createSubscription(
     'std_msgs/msg/String',
@@ -413,6 +421,43 @@ function publishGPSData(gpsData, timestamp) {
   return true;
 }
 
+// Method to publish magnetometer data using sensor_msgs/MagneticField
+function publishMagnetometerData(magData, timestamp) {
+  if (!publishers.magnetometer) return false;
+
+  const header = {
+    stamp: timestamp || {
+      sec: Math.floor(Date.now() / 1000),
+      nanosec: (Date.now() % 1000) * 1000000
+    },
+    frame_id: 'magnetometer_frame'
+  };
+
+  // When the source is the Generic Sensor API the values are already in Tesla.
+  // When the source is the DeviceOrientationEvent fallback the values form a
+  // unit direction vector (magnitude unknown), so covariance is set to -1.
+  const covariance = magData.source === 'api'
+    ? new Array(9).fill(0)   // diagonal unknown → use zeros with -1 first element
+    : new Array(9).fill(-1); // unknown covariance
+
+  if (magData.source === 'api') {
+    covariance[0] = -1; // unknown diagonal variance
+  }
+
+  const magMsg = {
+    header: header,
+    magnetic_field: {
+      x: magData.x || 0.0,
+      y: magData.y || 0.0,
+      z: magData.z || 0.0
+    },
+    magnetic_field_covariance: covariance
+  };
+
+  publishers.magnetometer.publish(magMsg);
+  return true;
+}
+
 module.exports = {
   initRos,
   startSpinning,
@@ -422,5 +467,6 @@ module.exports = {
   publishMicrophoneTranscription, // Renamed from publishAudioTranscription
   publishIMUData, // Added for iOS IMU sensor data
   publishGPSData, // Added for GPS location data
+  publishMagnetometerData, // Added for magnetometer data
   getPublishers: () => publishers
 };

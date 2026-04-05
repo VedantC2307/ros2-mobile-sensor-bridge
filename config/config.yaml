@@ -5,7 +5,11 @@ camera:
 
 imu:
   sample_rate: 30               # Data sampling rate in Hz (recommended: 10-60Hz)
-                                # Higher rates provide smoother data but use more bandwidth 
+                                # Higher rates provide smoother data but use more bandwidth
+
+magnetometer:
+  sample_rate: 10               # Data sampling rate in Hz (recommended: 5-20Hz)
+                                # Uses Generic Sensor API (Android) or DeviceOrientationEvent (iOS fallback)
 
 audio:
   mode: "tts"                   # Options: "wav", "mp3" or "tts"
