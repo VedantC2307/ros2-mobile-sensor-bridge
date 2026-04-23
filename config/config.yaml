@@ -5,7 +5,9 @@ camera:
 
 imu:
   sample_rate: 30               # Data sampling rate in Hz (recommended: 10-60Hz)
-                                # Higher rates provide smoother data but use more bandwidth 
+                                # Higher rates provide smoother data but use more bandwidth
+  convert_to_radians: true      # If the IMU publishes angular velocity in degrees/s,
+                                # set to true to convert to radians/s.
 
 audio:
   mode: "tts"                   # Options: "wav", "mp3" or "tts"

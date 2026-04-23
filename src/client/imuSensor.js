@@ -10,19 +10,20 @@ class IMUSensorManager {
     this.isActive = false;
     this.ws = null;
     this.sampleRate = 30; // Hz - default value, will be updated from config
+    this.convertToRadians = false; // Boolean - default value, will be updated from config
     this.intervalId = null;
-    
+
     // Store sensor data - only accelerometer and gyroscope
     this.accelerometerData = { x: 0, y: 0, z: 0 };
     this.gyroscopeData = { alpha: 0, beta: 0, gamma: 0 };
-    
+
     // Device detection
     this.isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
     this.isAndroid = /Android/.test(navigator.userAgent);
-    
+
     // Device motion permission status
     this.permissionGranted = false;
-    
+
     // Load configuration
     this.loadConfig();
   }
@@ -35,9 +36,15 @@ class IMUSensorManager {
       const response = await fetch('/api/config');
       if (response.ok) {
         const config = await response.json();
+
         if (config.imu && config.imu.sample_rate) {
           this.sampleRate = config.imu.sample_rate;
           console.log('IMU sample rate loaded from config:', this.sampleRate, 'Hz');
+        }
+
+        if (config.imu && config.imu.convert_to_radians !== undefined) {
+          this.convertToRadians = config.imu.convert_to_radians;
+          console.log('IMU convert_to_radians parameter loaded from config:', this.convertToRadians);
         }
       }
     } catch (error) {
@@ -54,17 +61,17 @@ class IMUSensorManager {
     // For Android devices - check if permission is needed
     if (this.isAndroid) {
       console.log('Android device detected, checking if permission is needed...');
-      
+
       // Check if DeviceMotionEvent requires permission (modern Android browsers)
-      const hasMotionAPI = typeof DeviceMotionEvent !== 'undefined' && 
+      const hasMotionAPI = typeof DeviceMotionEvent !== 'undefined' &&
                            typeof DeviceMotionEvent.requestPermission === 'function';
-      
+
       if (hasMotionAPI) {
         try {
           console.log('Requesting DeviceMotionEvent permission for Android...');
           const motionState = await DeviceMotionEvent.requestPermission();
           console.log('Android motion permission state:', motionState);
-          
+
           if (motionState === 'granted') {
             console.log('Android motion permission granted');
             this.permissionGranted = true;
@@ -83,28 +90,28 @@ class IMUSensorManager {
         return Promise.resolve(true);
       }
     }
-    
+
     // For non-iOS and non-Android devices
     if (!this.isIOS) {
       console.log('Not an iOS/Android device, no need to request permission');
       return Promise.resolve(true);
     }
-    
+
     // iOS-specific permission handling
     // Check for DeviceMotionEvent API
-    const hasMotionAPI = typeof DeviceMotionEvent !== 'undefined' && 
+    const hasMotionAPI = typeof DeviceMotionEvent !== 'undefined' &&
                          typeof DeviceMotionEvent.requestPermission === 'function';
-    
+
     // iOS 13+ requires explicit permission
     if (hasMotionAPI) {
       try {
         console.log('Requesting motion permission for iOS device...');
-        
+
         // Request permission for DeviceMotionEvent
         console.log('Requesting DeviceMotionEvent permission...');
         const motionState = await DeviceMotionEvent.requestPermission();
         console.log('Motion permission state:', motionState);
-        
+
         if (motionState === 'granted') {
           console.log('Motion permission granted');
           this.permissionGranted = true;
@@ -130,12 +137,12 @@ class IMUSensorManager {
   async startIMUSensor(websocket, isSessionActive) {
     this.ws = websocket;
     this.isActive = isSessionActive;
-    
+
     if (!this.isIOS && !this.isAndroid) {
       console.log('IMU sensor only implemented for iOS and Android devices');
       return false;
     }
-    
+
     try {
       // Check Android sensor availability first if on Android
       if (this.isAndroid) {
@@ -150,11 +157,11 @@ class IMUSensorManager {
           // We don't return false here as we can still try with whatever sensors are available
         }
       }
-      
+
       // Request permission if needed
       console.log('Starting IMU sensor and requesting permissions...');
       const permissionGranted = await this.requestPermission();
-      
+
       if (!permissionGranted) {
         console.error('IMU sensor permission denied');
         // Show a user-friendly alert
@@ -165,17 +172,17 @@ class IMUSensorManager {
         }
         return false;
       }
-      
+
       console.log('Permission granted, setting up sensors...');
-      
+
       // Setup event handlers for accelerometer and gyroscope
       this.setupAccelerometerAndGyroscope();
-      
+
       // Start sending data at the specified sample rate
       this.intervalId = setInterval(() => {
         this.sendSensorData();
       }, 1000 / this.sampleRate);
-      
+
       const deviceType = this.isIOS ? 'iOS' : 'Android';
       console.log(`${deviceType} IMU sensor manager initialized successfully`);
       return true;
@@ -191,24 +198,24 @@ class IMUSensorManager {
       this.ws = websocket;  // Use consistent property name
       this.websocket = websocket;  // Keep backup for compatibility
       this.isActive = isSessionActive;
-      
+
       // Check if we already have permission (for iOS) or if we're on Android
       if (this.isIOS && !this.permissionGranted) {
         console.warn('Permission not granted for iOS IMU sensor, cannot start without permission');
         return false;
       }
-      
+
       // For Android or when iOS permission is already granted, proceed directly
       console.log('Starting IMU sensor with existing permissions...');
-      
+
       // Setup event handlers for accelerometer and gyroscope
       this.setupAccelerometerAndGyroscope();
-      
+
       // Start sending data at the specified sample rate
       this.intervalId = setInterval(() => {
         this.sendSensorData();
       }, 1000 / this.sampleRate);
-      
+
       const deviceType = this.isIOS ? 'iOS' : 'Android';
       console.log(`${deviceType} IMU sensor started successfully with existing permissions`);
       return true;
@@ -222,7 +229,7 @@ class IMUSensorManager {
   setupAccelerometerAndGyroscope() {
     window.addEventListener('devicemotion', (event) => {
       if (!this.isActive) return;
-      
+
       // Get accelerometer data (in m/s²)
       if (event.acceleration) {
         // Both iOS and Android provide the same accelerometer data format
@@ -240,7 +247,7 @@ class IMUSensorManager {
           z: event.accelerationIncludingGravity.z || 0
         };
       }
-      
+
       // Get gyroscope data (in rad/s)
       if (event.rotationRate) {
         this.gyroscopeData = {
@@ -261,7 +268,7 @@ class IMUSensorManager {
     }
 
     const timestamp = Date.now();
-    
+
     // Create a structured payload with only accelerometer and gyroscope data
     const payload = {
       imu: {
@@ -283,24 +290,24 @@ class IMUSensorManager {
   checkAndroidSensorAvailability() {
     // Check if the device supports the required sensor events
     const hasDeviceMotion = 'ondevicemotion' in window;
-    
+
     if (!hasDeviceMotion) {
       console.warn('Android device missing required DeviceMotion sensor events');
       return false;
     }
-    
+
     return true;
   }
 
   // Stop IMU data collection
   stopIMUSensor() {
     this.isActive = false;
-    
+
     if (this.intervalId) {
       clearInterval(this.intervalId);
       this.intervalId = null;
     }
-    
+
     const deviceType = this.isIOS ? 'iOS' : this.isAndroid ? 'Android' : 'Unknown';
     console.log(`${deviceType} IMU sensor stopped`);
     return Promise.resolve();

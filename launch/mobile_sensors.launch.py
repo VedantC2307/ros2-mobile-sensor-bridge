@@ -17,7 +17,7 @@ def generate_launch_description():
         'dist',
         'server',
         'index.js')
-    
+
     cert_directory = os.path.join(share_directory, 'dist')
 
     sensor_node = Node(

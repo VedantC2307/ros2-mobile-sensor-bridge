@@ -20,8 +20,13 @@ let servers = {
 // Track TTS clients
 let ttsClients = new Set();
 
+// Store application configuration
+let appConfig = {};
+
 // Initialize all WebSocket servers and attach them to the HTTP server
-function initWebSockets(server) {
+function initWebSockets(server, config = {}) {
+  appConfig = config;
+
   // Create WebSocket servers for different data types
   servers.pose = new WebSocket.Server({ noServer: true });
   servers.camera = new WebSocket.Server({ noServer: true });
@@ -30,7 +35,7 @@ function initWebSockets(server) {
   servers.wavAudio = new WebSocket.Server({ noServer: true });
   servers.imu = new WebSocket.Server({ noServer: true }); // Added for iOS and Android IMU sensor data
   servers.gps = new WebSocket.Server({ noServer: true }); // Added for GPS location data
-  
+
   // Set up WebSocket route handlers
   server.on('upgrade', (request, socket, head) => {
     const pathname = new URL(request.url, `http://${request.headers.host}`).pathname;
@@ -75,7 +80,7 @@ function initWebSockets(server) {
         socket.destroy();
     }
   });
-  
+
   // Initialize event handlers for each WebSocket type
   setupPoseHandlers();
   setupCameraHandlers();
@@ -84,7 +89,7 @@ function initWebSockets(server) {
   setupWavAudioHandlers();
   setupIMUHandlers(); // Added for iOS and Android IMU sensor data
   setupGPSHandlers(); // Added for GPS location data
-  
+
   return servers;
 }
 
@@ -106,7 +111,7 @@ function setupPoseHandlers() {
         Logger.error('ROS', `Error processing pose message: ${err}`);
       }
     });
-    
+
     // Add disconnect logging
     ws.on('close', () => {
       Logger.info('APP', 'Pose data sensor deactivated');
@@ -126,17 +131,17 @@ function setupCameraHandlers() {
             // Convert base64 string to binary data
             const base64Data = data.camera.split(',')[1]; // Remove data URL prefix if present
             const imageBuffer = Buffer.from(base64Data, 'base64');
-            
+
             // Extract image dimensions if available, or use defaults
             const width = data.width || 640;
             const height = data.height || 480;
-            
+
             // Generate timestamp from data or current time
             const stamp = {
               sec: Math.floor(data.timestamp ? data.timestamp / 1000 : Date.now() / 1000),
               nanosec: (data.timestamp ? data.timestamp % 1000 : Date.now() % 1000) * 1000000
             };
-            
+
             // Use ROS interface to publish camera data
             rosInterface.publishCameraData(imageBuffer, width, height, stamp);
           } catch (error) {
@@ -147,7 +152,7 @@ function setupCameraHandlers() {
         Logger.error('ROS', `Error processing camera message: ${err}`);
       }
     });
-    
+
     // Add disconnect logging
     ws.on('close', () => {
       Logger.info('APP', 'Camera sensor deactivated');
@@ -159,9 +164,9 @@ function setupCameraHandlers() {
 function setupTTSHandlers() {
   servers.tts.on('connection', (ws) => {
     Logger.info('APP', 'Text-to-speech node activated');
-    
+
     ttsClients.add(ws);
-    
+
     // Send a welcome message to verify the connection works
     try {
       ws.send("TTS system ready");
@@ -169,12 +174,12 @@ function setupTTSHandlers() {
     } catch (error) {
       Logger.error('ROS', `Error initializing TTS node: ${error}`);
     }
-    
+
     ws.on('close', () => {
       Logger.info('APP', 'Text-to-speech node deactivated');
       ttsClients.delete(ws);
     });
-    
+
     ws.on('error', (error) => {
       Logger.error('ROS', `TTS node error: ${error}`);
     });
@@ -185,22 +190,22 @@ function setupTTSHandlers() {
 function setupMicrophoneHandlers() {
   servers.microphone.on('connection', (ws) => {
     Logger.info('APP', 'Microphone sensor activated');
-    
+
     ws.on('message', async (message) => {
       try {
         const data = JSON.parse(message);
         if (data.transcription) {
           Logger.info('ROS', `Transcription received: "${data.transcription}"`);
-          
+
           // Use ROS interface to publish microphone transcription
-          rosInterface.publishMicrophoneTranscription(data.transcription, 
+          rosInterface.publishMicrophoneTranscription(data.transcription,
             data.header && data.header.stamp ? data.header.stamp : null);
         }
       } catch (err) {
         Logger.error('ROS', `Error processing microphone message: ${err}`);
       }
     });
-    
+
     // Add disconnect logging
     ws.on('close', () => {
       Logger.info('APP', 'Microphone sensor deactivated');
@@ -212,10 +217,10 @@ function setupMicrophoneHandlers() {
 function setupWavAudioHandlers() {
   servers.wavAudio.on('connection', (ws) => {
     Logger.info('APP','Audio playback node activated');
-    
+
     // Track client state in the connection
     ws.isReady = true;
-    
+
     ws.on('message', (message) => {
       try {
         // Handle received messages if needed
@@ -223,19 +228,19 @@ function setupWavAudioHandlers() {
         Logger.error('ROS', `Error processing audio data: ${error}`);
       }
     });
-    
+
     ws.on('close', () => {
       Logger.info('APP', 'Audio playback node deactivated');
     });
-    
+
     ws.on('error', (error) => {
       Logger.error('ROS', `Audio data processing error: ${error}`);
       ws.isReady = false;
     });
-    
+
     // Send a connection confirmation message
-    ws.send(JSON.stringify({ 
-      status: 'connected', 
+    ws.send(JSON.stringify({
+      status: 'connected',
       message: 'Ready to receive audio data',
       sessionState: 'active' // This is important for the client to know it can play audio
     }));
@@ -253,7 +258,7 @@ function closeAllConnections() {
       });
     }
   });
-  
+
   Logger.info('APP', 'All ROS sensor nodes deactivated');
 }
 
@@ -261,7 +266,9 @@ function closeAllConnections() {
 function setupIMUHandlers() {
   servers.imu.on('connection', (ws) => {
     Logger.info('APP', 'IMU sensor activated');
-    
+
+    const convertToRadians = appConfig?.imu?.convert_to_radians || false;
+
     ws.on('message', async (message) => {
       try {
         const data = JSON.parse(message);
@@ -269,21 +276,21 @@ function setupIMUHandlers() {
           // Log the IMU data to the console for debugging
           Logger.debug('IMU', `Accelerometer: x=${data.imu.accelerometer.x.toFixed(2)}, y=${data.imu.accelerometer.y.toFixed(2)}, z=${data.imu.accelerometer.z.toFixed(2)}`);
           Logger.debug('IMU', `Gyroscope: alpha=${data.imu.gyroscope.alpha.toFixed(2)}, beta=${data.imu.gyroscope.beta.toFixed(2)}, gamma=${data.imu.gyroscope.gamma.toFixed(2)}`);
-          
+
           // Generate timestamp from IMU data or current time
           const stamp = {
             sec: Math.floor(data.imu.timestamp ? data.imu.timestamp / 1000 : Date.now() / 1000),
             nanosec: (data.imu.timestamp ? data.imu.timestamp % 1000 : Date.now() % 1000) * 1000000
           };
-          
+
           // Use ROS interface to publish IMU data
-          rosInterface.publishIMUData(data.imu, stamp);
+          rosInterface.publishIMUData(data.imu, stamp, convertToRadians);
         }
       } catch (err) {
         Logger.error('ROS', `Error processing IMU message: ${err}`);
       }
     });
-    
+
     ws.on('close', () => {
       Logger.info('APP', 'IMU sensor deactivated');
     });
@@ -294,7 +301,7 @@ function setupIMUHandlers() {
 function setupGPSHandlers() {
   servers.gps.on('connection', (ws) => {
     Logger.info('APP', 'GPS sensor activated');
-    
+
     ws.on('message', async (message) => {
       try {
         const data = JSON.parse(message);
@@ -304,13 +311,13 @@ function setupGPSHandlers() {
           if (data.gps.accuracy) {
             Logger.debug('GPS', `Accuracy: ${data.gps.accuracy.toFixed(2)}m, Heading: ${data.gps.heading?.toFixed(2) || 'N/A'}, Speed: ${data.gps.speed?.toFixed(2) || 'N/A'}m/s`);
           }
-          
+
           // Generate timestamp from GPS data or current time
           const stamp = {
             sec: Math.floor(data.gps.timestamp ? data.gps.timestamp / 1000 : Date.now() / 1000),
             nanosec: (data.gps.timestamp ? data.gps.timestamp % 1000 : Date.now() % 1000) * 1000000
           };
-          
+
           // Use ROS interface to publish GPS data
           rosInterface.publishGPSData(data.gps, stamp);
         }
@@ -318,7 +325,7 @@ function setupGPSHandlers() {
         Logger.error('ROS', `Error processing GPS message: ${err}`);
       }
     });
-    
+
     ws.on('close', () => {
       Logger.info('APP', 'GPS sensor deactivated');
     });

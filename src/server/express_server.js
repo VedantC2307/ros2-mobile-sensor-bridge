@@ -12,7 +12,7 @@ const Logger = require('./logger'); // Import Logger module with correct capital
 // Initialize Express application
 function createExpressApp(config) {
   const app = express();
-  
+
   // Serve static files from the "client" folder
   app.use(express.static(path.join(__dirname, '../client')));
   app.use(express.json());
@@ -29,16 +29,20 @@ function createExpressApp(config) {
       camera: config.camera || {},
       audio: config.audio || {},
       microphone: config.microphone || {},
-      imu: config.imu || { sample_rate: 30 }, // Add IMU configuration
+      // Add IMU configuration
+      imu: {
+        sample_rate: (config.imu && config.imu.sample_rate) || 30,
+        convert_to_radians: (config.imu && config.imu.convert_to_radians) || false
+      },
       debug: {
         // Handle nested debug properties
         'mobile-debug-console': config.debug && config.debug['mobile-debug-console'] || false
       }
     };
-    
+
     res.json(clientConfig);
   });
-  
+
   return app;
 }
 
@@ -49,7 +53,7 @@ function createHttpsServer(app) {
       key: fs.readFileSync(path.join(__dirname, '../ssl/key.pem')),
       cert: fs.readFileSync(path.join(__dirname, '../ssl/cert.pem')),
     };
-    
+
     return https.createServer(options, app);
   } catch (error) {
     Logger.error('SERVER', `Error creating HTTPS server: ${error}`);
@@ -61,7 +65,7 @@ function createHttpsServer(app) {
 function getLocalIP() {
   const { networkInterfaces } = os;
   const nets = networkInterfaces();
-  
+
   for (const name of Object.keys(nets)) {
     for (const net of nets[name]) {
       // Skip over non-IPv4 and internal (loopback) addresses
@@ -70,7 +74,7 @@ function getLocalIP() {
       }
     }
   }
-  
+
   return 'localhost'; // Fallback if no suitable IP is found
 }
 
@@ -80,11 +84,11 @@ function startServer(server, port = 4000) {
     try {
       server.listen(port, '0.0.0.0', () => {
         Logger.info('SERVER', `HTTPS server running on port ${port}`);
-        
+
         // Display all network interfaces for easy connection
         const { networkInterfaces } = require('os');
         const nets = networkInterfaces();
-        
+
         for (const name of Object.keys(nets)) {
           for (const net of nets[name]) {
             // Skip over non-IPv4 and internal (loopback) addresses
@@ -93,7 +97,7 @@ function startServer(server, port = 4000) {
             }
           }
         }
-        
+
         resolve(server);
       });
     } catch (err) {
@@ -110,23 +114,23 @@ function stopServer(server) {
       resolve();
       return;
     }
-    
+
     // Set a timeout to ensure we don't hang
     const timeout = setTimeout(() => {
       Logger.warn('SERVER', 'Server close operation timed out, forcing resolution');
       resolve();
     }, 2000); // 2 second timeout
-    
+
     try {
       server.close(err => {
         clearTimeout(timeout); // Clear the timeout as we got a response
-        
+
         if (err) {
           Logger.error('SERVER', `Error stopping server: ${err}`);
         } else {
           Logger.success('SERVER', 'HTTPS server closed successfully');
         }
-        
+
         // Always resolve even if there was an error
         resolve();
       });
